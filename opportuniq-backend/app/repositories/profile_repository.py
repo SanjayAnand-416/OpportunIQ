@@ -164,14 +164,14 @@ async def update_profile(profile_id: str, updates: dict[str, Any]) -> dict[str, 
         return existing_profile
 
     set_clause = ", ".join(f"{field_name} = ?" for field_name in clean_updates)
-    values = [*clean_updates.values(), profile_id]
+    values = [*clean_updates.values(), profile_id, profile_id]
 
     async with get_db() as db:
         await db.execute(
             f"""
             UPDATE student_profiles
             SET {set_clause}, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
+            WHERE profile_id = ? OR id = ?
             """,
             values,
         )

@@ -3,7 +3,45 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
+
+
+OPPORTUNITY_TYPES = {
+    "internship": "Internship",
+    "full-time": "Full-time",
+    "full time": "Full-time",
+    "hackathon": "Hackathon",
+    "all": "All",
+}
+
+
+def _strip_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return value.strip()
+
+
+def _require_non_empty(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("Field cannot be empty.")
+    return stripped
+
+
+def _normalize_list(value: list[str]) -> list[str]:
+    normalized = [item.strip() for item in value if item.strip()]
+    if not normalized:
+        raise ValueError("At least one value is required.")
+    return normalized
+
+
+def _normalize_opportunity_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = OPPORTUNITY_TYPES.get(value.strip().lower())
+    if normalized is None:
+        raise ValueError("Opportunity type must be Internship, Full-time, Hackathon, or All.")
+    return normalized
 
 
 class ResumeAIData(BaseModel):
@@ -29,14 +67,19 @@ class ResumeAIResponse(BaseModel):
 class StudentProfile(BaseModel):
     """Student profile used for opportunity matching."""
 
+    profile_id: str | None = None
     id: int | None = None
+    name: str | None = None
     full_name: str | None = None
     email: str | None = None
     phone: str | None = None
     year_of_study: str | None = None
     graduation_year: int | None = None
+    degree: str | None = None
+    college: str | None = None
     target_roles: list[str] = Field(default_factory=list)
     skills: list[str] = Field(default_factory=list)
+    location: str | None = None
     preferred_location: str | None = None
     opportunity_type: str | None = None
     created_at: datetime | None = None
@@ -83,3 +126,99 @@ class ReminderMessage(BaseModel):
     scheduled_for: datetime
     sent_at: datetime | None = None
     status: str = "pending"
+
+
+class ManualProfileCreate(BaseModel):
+    """Request body for manual profile creation."""
+
+    name: str
+    email: str
+    year_of_study: str
+    graduation_year: int | None = None
+    degree: str
+    college: str
+    skills: list[str]
+    target_roles: list[str]
+    location: str
+    opportunity_type: str
+
+    @field_validator("name", "email", "year_of_study", "degree", "college", "location")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        return _require_non_empty(value)
+
+    @field_validator("skills", "target_roles")
+    @classmethod
+    def validate_required_list(cls, value: list[str]) -> list[str]:
+        return _normalize_list(value)
+
+    @field_validator("opportunity_type")
+    @classmethod
+    def validate_opportunity_type(cls, value: str) -> str:
+        return _normalize_opportunity_type(value) or value
+
+
+class ProfileUpdate(BaseModel):
+    """Request body for partial profile updates."""
+
+    name: str | None = None
+    email: str | None = None
+    year_of_study: str | None = None
+    graduation_year: int | None = None
+    degree: str | None = None
+    college: str | None = None
+    skills: list[str] | None = None
+    target_roles: list[str] | None = None
+    location: str | None = None
+    opportunity_type: str | None = None
+
+    @field_validator("name", "email", "year_of_study", "degree", "college", "location")
+    @classmethod
+    def strip_optional_text(cls, value: str | None) -> str | None:
+        return _strip_text(value)
+
+    @field_validator("skills", "target_roles")
+    @classmethod
+    def strip_optional_lists(cls, value: list[str] | None) -> list[str] | None:
+        if value is None:
+            return None
+        return [item.strip() for item in value if item.strip()]
+
+    @field_validator("opportunity_type")
+    @classmethod
+    def normalize_optional_opportunity_type(cls, value: str | None) -> str | None:
+        return _normalize_opportunity_type(value)
+
+
+class ProfileResponse(BaseModel):
+    """Profile response returned by the Profile API."""
+
+    profile_id: str
+    name: str | None = None
+    email: str | None = None
+    year_of_study: str | None = None
+    graduation_year: int | None = None
+    degree: str | None = None
+    college: str | None = None
+    skills: list[str] = Field(default_factory=list)
+    target_roles: list[str] = Field(default_factory=list)
+    location: str | None = None
+    opportunity_type: str | None = None
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+
+
+class ProfileCreateResponse(BaseModel):
+    """Response returned after a profile is created."""
+
+    profile_id: str
+    profile: ProfileResponse
+    missing_fields: list[str] = Field(default_factory=list)
+
+
+class ProfileUpdateResponse(BaseModel):
+    """Response returned after a profile is updated."""
+
+    success: bool
+    profile: ProfileResponse
+    missing_fields: list[str] = Field(default_factory=list)

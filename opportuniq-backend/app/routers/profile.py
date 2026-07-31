@@ -1,12 +1,19 @@
 """Profile API routes for the OpportunIQ backend."""
 
+import logging
+import sqlite3
+import uuid
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 
-from app.models import StudentProfile
+from app.models import ManualProfileCreate, ProfileCreateResponse, ProfileResponse, StudentProfile
+from app.repositories import profile_repository
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(
@@ -92,3 +99,36 @@ def _find_missing_fields(profile: Mapping[str, Any]) -> list[str]:
 def _file_extension(filename: str) -> str:
     """Return the normalized extension for an uploaded file name."""
     return Path(filename).suffix.lower()
+
+
+@router.post(
+    "/manual",
+    response_model=ProfileCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_manual_profile(payload: ManualProfileCreate) -> ProfileCreateResponse:
+    """Create a student profile from manual entry."""
+    profile_id = str(uuid.uuid4())
+    profile = _build_student_profile(profile_id, payload.model_dump())
+
+    try:
+        created_profile = await profile_repository.create_profile(profile)
+    except sqlite3.IntegrityError as exc:
+        logger.warning("Profile ID conflict while creating profile: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Profile could not be created due to an identifier conflict.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected database error while creating profile")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Profile could not be created.",
+        ) from exc
+
+    profile_response = ProfileResponse(**created_profile)
+    return ProfileCreateResponse(
+        profile_id=profile_response.profile_id,
+        profile=profile_response,
+        missing_fields=[],
+    )

@@ -124,6 +124,10 @@ def _clean_opportunity(raw: Mapping[str, Any]) -> dict[str, Any] | None:
     }
 
 
+def _clamp_limit(limit: int) -> int:
+    return max(1, min(int(limit), 100))
+
+
 async def delete_opportunities_by_session(session_id: str) -> int:
     """Delete all opportunities for one discovery session."""
     async with get_db() as db:
@@ -213,3 +217,66 @@ async def save_opportunities(
         await db.commit()
 
     return await get_opportunities_by_session(session_id, limit=len(clean_opportunities))
+
+
+async def get_opportunities_by_session(
+    session_id: str,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return ranked non-expired opportunities for one discovery session."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            f"""
+            SELECT {', '.join(OPPORTUNITY_COLUMNS)}
+            FROM opportunities
+            WHERE session_id = ? AND COALESCE(is_expired, 0) = 0
+            ORDER BY combined_score DESC, fetched_at DESC
+            LIMIT ?
+            """,
+            (session_id, _clamp_limit(limit)),
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+    return [item for row in rows if (item := row_to_opportunity(row)) is not None]
+
+
+async def get_latest_opportunities_by_profile(
+    profile_id: str,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Return opportunities from the newest non-empty session for a profile."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            """
+            SELECT session_id
+            FROM opportunities
+            WHERE profile_id = ? AND COALESCE(is_expired, 0) = 0
+            GROUP BY session_id
+            ORDER BY MAX(fetched_at) DESC
+            LIMIT 1
+            """,
+            (profile_id,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+    if row is None:
+        return []
+    return await get_opportunities_by_session(row["session_id"], limit=limit)
+
+
+async def get_opportunity_by_id(
+    opportunity_id: str,
+) -> dict[str, Any] | None:
+    """Return one non-expired opportunity by public opportunity ID."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            f"""
+            SELECT {', '.join(OPPORTUNITY_COLUMNS)}
+            FROM opportunities
+            WHERE opportunity_id = ? AND COALESCE(is_expired, 0) = 0
+            """,
+            (opportunity_id,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+    return row_to_opportunity(row)

@@ -17,8 +17,12 @@ OPPORTUNITY_TYPES = {
 DEADLINE_EVENT_TYPES = {
     "interview": "interview",
     "submission": "submission",
+    "oa": "assessment",
+    "online_assessment": "assessment",
+    "online assessment": "assessment",
     "offer_acceptance": "offer_acceptance",
     "offer acceptance": "offer_acceptance",
+    "offer": "offer_acceptance",
     "application": "application",
     "assessment": "assessment",
     "registration": "registration",

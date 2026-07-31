@@ -17,6 +17,37 @@ export async function uploadResume(file) {
   return response.data
 }
 
+export async function getProfile(profileId) {
+  const response = await apiClient.get(`/api/profile/${profileId}`)
+
+  return response.data
+}
+
+export async function updateProfile(profileId, profile) {
+  const response = await apiClient.patch(`/api/profile/${profileId}`, profile)
+
+  return response.data
+}
+
+export function getProfileErrorMessage(error) {
+  if (!error.response) {
+    return 'Network failure. Please check your connection and try again.'
+  }
+
+  const status = error.response.status
+  const detail = error.response.data?.detail || error.response.data?.message
+
+  if (status === 404) {
+    return 'Profile not found. Please upload your resume again.'
+  }
+
+  if (status >= 500) {
+    return 'Unexpected server error. Please try again later.'
+  }
+
+  return detail || 'Backend error. Please try again.'
+}
+
 export function getUploadErrorMessage(error) {
   if (error.code === 'ECONNABORTED') {
     return 'Request timeout. The upload took too long. Please try again.'

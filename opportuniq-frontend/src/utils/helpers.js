@@ -35,3 +35,58 @@ export function validateResumeFile(file) {
 
   return ''
 }
+
+export function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+}
+
+export function hasValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0
+  }
+
+  return Boolean(String(value ?? '').trim())
+}
+
+export function normalizeProfile(profile = {}) {
+  return {
+    fullName: profile.fullName || profile.full_name || profile.name || '',
+    email: profile.email || '',
+    degree: profile.degree || '',
+    college: profile.college || profile.university || '',
+    yearOfStudy: profile.yearOfStudy || profile.year_of_study || '',
+    skills: profile.skills || [],
+    targetRoles: profile.targetRoles || profile.target_roles || [],
+    preferredLocation:
+      profile.preferredLocation || profile.preferred_location || profile.location || '',
+    opportunityType:
+      profile.opportunityType || profile.opportunity_type || profile.preference || '',
+  }
+}
+
+export function serializeProfile(profile) {
+  return {
+    full_name: profile.fullName,
+    email: profile.email,
+    degree: profile.degree,
+    college: profile.college,
+    year_of_study: profile.yearOfStudy,
+    skills: profile.skills,
+    target_roles: profile.targetRoles,
+    preferred_location: profile.preferredLocation,
+    opportunity_type: profile.opportunityType,
+  }
+}
+
+export function isProfileComplete(profile) {
+  return (
+    hasValue(profile.fullName) &&
+    isValidEmail(profile.email) &&
+    hasValue(profile.degree) &&
+    hasValue(profile.college) &&
+    hasValue(profile.skills) &&
+    hasValue(profile.targetRoles) &&
+    hasValue(profile.preferredLocation) &&
+    hasValue(profile.opportunityType)
+  )
+}

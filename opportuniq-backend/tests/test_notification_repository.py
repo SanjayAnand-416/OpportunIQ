@@ -26,7 +26,10 @@ def test_create_returns_populated_record(repo):
 
 def test_save_notification_matches_scheduler_protocol(repo):
     reminder = ReminderMessage(
-        subject="Apply soon", body="Deadline in 3 days.", call_to_action="Apply", urgency=Urgency.HIGH
+        subject="Apply soon",
+        body="Deadline in 3 days.",
+        call_to_action="Apply",
+        urgency=Urgency.HIGH,
     )
     notification_id = asyncio.run(repo.save_notification("stu-1", "opp-1", reminder))
     record = asyncio.run(repo.get(notification_id))

@@ -141,7 +141,10 @@ def test_default_host_and_port_used_when_unset(monkeypatch):
 
     monkeypatch.setattr(FakeSMTP, "__init__", capturing_init)
     send(to_email="a@b.com", subject="s", body="b")
-    assert captured == {"host": email_service.DEFAULT_SMTP_HOST, "port": email_service.DEFAULT_SMTP_PORT}
+    assert captured == {
+        "host": email_service.DEFAULT_SMTP_HOST,
+        "port": email_service.DEFAULT_SMTP_PORT,
+    }
 
 
 def test_custom_host_and_port_from_env(monkeypatch):

@@ -38,7 +38,9 @@ def test_create_notification_returns_201(client):
 
 
 def test_create_notification_rejects_blank_fields(client):
-    response = client.post("/notifications", json={"student_id": "stu-1", "subject": "", "body": "b"})
+    response = client.post(
+        "/notifications", json={"student_id": "stu-1", "subject": "", "body": "b"}
+    )
     assert response.status_code == 422
 
 

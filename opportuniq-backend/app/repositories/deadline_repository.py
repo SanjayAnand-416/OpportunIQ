@@ -32,6 +32,22 @@ DEADLINE_COLUMNS = (
 
 ALLOWED_SOURCES = {"manual", "gmail"}
 
+UPDATE_FIELDS = {
+    "opportunity_id",
+    "title",
+    "organization",
+    "deadline_datetime",
+    "event_type",
+    "action_required",
+    "notes",
+    "confidence",
+    "needs_review",
+    "is_completed",
+    "is_cancelled",
+}
+
+BOOLEAN_FIELDS = {"needs_review", "is_completed", "is_cancelled"}
+
 
 def _to_utc_datetime(value: Any) -> datetime | None:
     """Parse a deadline datetime and normalize it to timezone-aware UTC."""
@@ -418,3 +434,58 @@ async def list_needs_review_deadlines(
         limit=limit,
     )
     return sorted(deadlines, key=lambda item: str(item.get("created_at") or ""), reverse=True)
+
+
+def _normalize_update_value(field_name: str, value: Any) -> Any:
+    if field_name == "title":
+        return _clean_title(value)
+    if field_name == "deadline_datetime":
+        return _serialize_datetime(value)
+    if field_name == "confidence":
+        return _float_value(value)
+    if field_name in BOOLEAN_FIELDS:
+        return int(bool(value))
+    if field_name in {
+        "opportunity_id",
+        "organization",
+        "event_type",
+        "action_required",
+        "notes",
+    }:
+        return _clean_optional_text(value)
+    return value
+
+
+async def update_deadline(
+    deadline_id: str,
+    updates: Mapping[str, Any],
+) -> dict[str, Any] | None:
+    """Apply allowlisted partial updates and return the updated deadline."""
+    existing_deadline = await get_deadline_by_id(deadline_id)
+    if existing_deadline is None:
+        return None
+
+    clean_updates: dict[str, Any] = {}
+    for field_name, value in updates.items():
+        if field_name not in UPDATE_FIELDS:
+            continue
+        clean_updates[field_name] = _normalize_update_value(field_name, value)
+
+    if not clean_updates:
+        return existing_deadline
+
+    set_clause = ", ".join(f"{field_name} = ?" for field_name in clean_updates)
+    values = [*clean_updates.values(), deadline_id]
+
+    async with get_db() as db:
+        await db.execute(
+            f"""
+            UPDATE deadline_registry
+            SET {set_clause}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            values,
+        )
+        await db.commit()
+
+    return await get_deadline_by_id(deadline_id)

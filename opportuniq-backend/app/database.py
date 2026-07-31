@@ -151,6 +151,85 @@ async def init_db() -> None:
         )
         await db.execute(
             """
+            CREATE TABLE IF NOT EXISTS deadline_registry (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL,
+                opportunity_id TEXT,
+                title TEXT NOT NULL,
+                organization TEXT,
+                deadline_datetime TIMESTAMP,
+                event_type TEXT,
+                action_required TEXT,
+                notes TEXT,
+                source TEXT NOT NULL,
+                gmail_message_id TEXT,
+                confidence REAL,
+                needs_review BOOLEAN DEFAULT FALSE,
+                is_completed BOOLEAN DEFAULT FALSE,
+                is_cancelled BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        for column_name, column_type in {
+            "profile_id": "TEXT",
+            "opportunity_id": "TEXT",
+            "title": "TEXT",
+            "organization": "TEXT",
+            "deadline_datetime": "TIMESTAMP",
+            "event_type": "TEXT",
+            "action_required": "TEXT",
+            "notes": "TEXT",
+            "source": "TEXT",
+            "gmail_message_id": "TEXT",
+            "confidence": "REAL",
+            "needs_review": "BOOLEAN DEFAULT FALSE",
+            "is_completed": "BOOLEAN DEFAULT FALSE",
+            "is_cancelled": "BOOLEAN DEFAULT FALSE",
+            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        }.items():
+            try:
+                await db.execute(
+                    f"ALTER TABLE deadline_registry ADD COLUMN {column_name} {column_type}"
+                )
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_deadline_registry_profile_id
+            ON deadline_registry(profile_id)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_deadline_registry_deadline_datetime
+            ON deadline_registry(deadline_datetime)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_deadline_registry_profile_deadline
+            ON deadline_registry(profile_id, deadline_datetime)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_deadline_registry_needs_review
+            ON deadline_registry(needs_review)
+            """
+        )
+        await db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_deadline_registry_gmail_unique
+            ON deadline_registry(profile_id, gmail_message_id)
+            WHERE gmail_message_id IS NOT NULL
+            """
+        )
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS gmail_connections (
                 profile_id TEXT PRIMARY KEY,
                 email TEXT,

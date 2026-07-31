@@ -708,9 +708,19 @@ a {
   transform: translateY(-2px);
 }
 
+.drop-zone:disabled,
+.upload-primary-button:disabled,
+.upload-secondary-button:disabled,
+.upload-resume-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+  transform: none;
+}
+
 .drop-zone:focus-visible,
 .upload-primary-button:focus-visible,
 .upload-secondary-button:focus-visible,
+.upload-resume-button:focus-visible,
 .error-dismiss:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 4px;
@@ -831,7 +841,8 @@ a {
 }
 
 .upload-primary-button,
-.upload-secondary-button {
+.upload-secondary-button,
+.upload-resume-button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -845,18 +856,21 @@ a {
 }
 
 .upload-primary-button:hover,
-.upload-secondary-button:hover {
+.upload-secondary-button:hover,
+.upload-resume-button:hover {
   transform: translateY(-1px);
 }
 
-.upload-primary-button {
+.upload-primary-button,
+.upload-resume-button {
   border: 1px solid #2563eb;
   color: #ffffff;
   background: #2563eb;
   box-shadow: 0 12px 22px rgba(37, 99, 235, 0.18);
 }
 
-.upload-primary-button:hover {
+.upload-primary-button:hover,
+.upload-resume-button:hover {
   background: #1d4ed8;
 }
 
@@ -870,6 +884,71 @@ a {
 .upload-secondary-button:hover {
   border-color: #fecaca;
   color: #b91c1c;
+}
+
+.upload-submit-area {
+  margin-top: 18px;
+}
+
+.upload-resume-button {
+  width: 100%;
+  min-height: 48px;
+}
+
+.upload-status,
+.upload-success {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.upload-status {
+  color: #1d4ed8;
+  background: #eff6ff;
+}
+
+.upload-success {
+  justify-content: flex-start;
+  color: #047857;
+  background: #dcfce7;
+}
+
+.upload-success p,
+.upload-success span {
+  display: block;
+}
+
+.upload-success p {
+  margin: 0;
+  color: #064e3b;
+}
+
+.upload-success span {
+  margin-top: 2px;
+  color: #047857;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.spinner {
+  animation: spin 800ms linear infinite;
+}
+
+.manual-fallback {
+  display: flex;
+  justify-content: center;
+  margin-top: 18px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .upload-info {
@@ -948,7 +1027,8 @@ a {
   }
 
   .upload-primary-button,
-  .upload-secondary-button {
+  .upload-secondary-button,
+  .upload-resume-button {
     width: 100%;
   }
 }

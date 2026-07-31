@@ -1,4 +1,4 @@
-import { CheckCircle2, FileText, Upload, X } from 'lucide-react'
+import { CheckCircle2, FileText, Loader2, Upload, X } from 'lucide-react'
 import { useRef } from 'react'
 import ErrorBanner from '../common/ErrorBanner'
 import { formatFileSize } from '../../utils/helpers'
@@ -7,7 +7,9 @@ export default function ResumeUploadCard({
   error,
   inputId,
   isDragging,
+  isProcessing,
   selectedFile,
+  uploadState,
   onBrowse,
   onDismissError,
   onDragEnter,
@@ -15,11 +17,20 @@ export default function ResumeUploadCard({
   onDragOver,
   onDrop,
   onFileChange,
+  onManualSetup,
   onRemoveFile,
+  onUploadResume,
 }) {
   const inputRef = useRef(null)
+  const isUploading = uploadState === 'uploading'
+  const isParsing = uploadState === 'parsing'
+  const isSuccess = uploadState === 'success'
 
   const handleBrowse = () => {
+    if (isProcessing) {
+      return
+    }
+
     inputRef.current?.click()
     onBrowse?.()
   }
@@ -46,6 +57,7 @@ export default function ResumeUploadCard({
         type="file"
         accept=".pdf,.doc,.docx"
         onChange={onFileChange}
+        disabled={isProcessing}
       />
 
       {selectedFile ? (
@@ -66,6 +78,7 @@ export default function ResumeUploadCard({
               type="button"
               className="upload-secondary-button"
               onClick={onRemoveFile}
+              disabled={isProcessing}
               aria-label="Remove selected file"
             >
               <X size={16} aria-hidden="true" />
@@ -75,10 +88,49 @@ export default function ResumeUploadCard({
               type="button"
               className="upload-primary-button"
               onClick={handleBrowse}
+              disabled={isProcessing}
               aria-label="Change selected resume file"
             >
               Change File
             </button>
+          </div>
+
+          <div className="upload-submit-area">
+            {isUploading && (
+              <div className="upload-status" aria-live="polite">
+                <Loader2 className="spinner" size={20} aria-hidden="true" />
+                Uploading your resume...
+              </div>
+            )}
+
+            {isParsing && (
+              <div className="upload-status" aria-live="polite">
+                <Loader2 className="spinner" size={20} aria-hidden="true" />
+                Extracting your profile with AI...
+              </div>
+            )}
+
+            {isSuccess && (
+              <div className="upload-success" aria-live="polite">
+                <CheckCircle2 size={22} aria-hidden="true" />
+                <div>
+                  <p>Resume uploaded successfully</p>
+                  <span>Preparing your profile...</span>
+                </div>
+              </div>
+            )}
+
+            {!isUploading && !isParsing && !isSuccess && (
+              <button
+                type="button"
+                className="upload-resume-button"
+                onClick={onUploadResume}
+                disabled={!selectedFile || isProcessing}
+                aria-label="Upload selected resume"
+              >
+                Upload Resume
+              </button>
+            )}
           </div>
         </div>
       ) : (
@@ -90,6 +142,7 @@ export default function ResumeUploadCard({
           onDragLeave={onDragLeave}
           onDragOver={onDragOver}
           onDrop={onDrop}
+          disabled={isProcessing}
           aria-label="Drag and drop your resume or click to browse files"
         >
           <span className="drop-zone-icon">
@@ -100,6 +153,19 @@ export default function ResumeUploadCard({
           <span className="drop-zone-meta">PDF • DOC • DOCX</span>
           <span className="drop-zone-meta">Maximum size: 5 MB</span>
         </button>
+      )}
+
+      {uploadState === 'error' && (
+        <div className="manual-fallback">
+          <button
+            type="button"
+            className="upload-secondary-button"
+            onClick={onManualSetup}
+            aria-label="Set up profile manually"
+          >
+            Set Up Manually
+          </button>
+        </div>
       )}
     </section>
   )

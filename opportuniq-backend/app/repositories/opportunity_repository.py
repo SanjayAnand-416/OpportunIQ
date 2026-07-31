@@ -248,11 +248,11 @@ async def get_latest_opportunities_by_profile(
     async with get_db() as db:
         cursor = await db.execute(
             """
-            SELECT session_id
+            SELECT session_id, MAX(id) AS latest_id
             FROM opportunities
             WHERE profile_id = ? AND COALESCE(is_expired, 0) = 0
             GROUP BY session_id
-            ORDER BY MAX(fetched_at) DESC
+            ORDER BY MAX(fetched_at) DESC, latest_id DESC
             LIMIT 1
             """,
             (profile_id,),
@@ -293,12 +293,12 @@ async def get_cached_discovery(
     async with get_db() as db:
         cursor = await db.execute(
             """
-            SELECT session_id, MAX(fetched_at) AS latest_fetched_at
+            SELECT session_id, MAX(fetched_at) AS latest_fetched_at, MAX(id) AS latest_id
             FROM opportunities
             WHERE profile_id = ? AND COALESCE(is_expired, 0) = 0
             GROUP BY session_id
             HAVING latest_fetched_at >= ?
-            ORDER BY latest_fetched_at DESC
+            ORDER BY latest_fetched_at DESC, latest_id DESC
             LIMIT 1
             """,
             (profile_id, cutoff),

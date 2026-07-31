@@ -65,18 +65,75 @@ async def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS opportunities (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                opportunity_id TEXT UNIQUE,
+                session_id TEXT,
+                profile_id TEXT,
                 source TEXT NOT NULL,
                 external_id TEXT,
                 title TEXT NOT NULL,
+                company TEXT,
+                platform TEXT,
                 organization TEXT,
                 location TEXT,
                 url TEXT,
+                url_hash TEXT,
                 description TEXT,
                 deadline TEXT,
+                stipend_or_prize TEXT,
+                eligibility TEXT,
+                skills_required TEXT,
+                also_on TEXT,
+                match_score REAL DEFAULT 0,
+                urgency_score REAL DEFAULT 0,
+                combined_score REAL DEFAULT 0,
+                is_expired INTEGER DEFAULT 0,
                 opportunity_type TEXT,
+                fetched_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(source, external_id)
             )
+            """
+        )
+        for column_name, column_type in {
+            "opportunity_id": "TEXT UNIQUE",
+            "session_id": "TEXT",
+            "profile_id": "TEXT",
+            "company": "TEXT",
+            "platform": "TEXT",
+            "url_hash": "TEXT",
+            "stipend_or_prize": "TEXT",
+            "eligibility": "TEXT",
+            "skills_required": "TEXT",
+            "also_on": "TEXT",
+            "match_score": "REAL DEFAULT 0",
+            "urgency_score": "REAL DEFAULT 0",
+            "combined_score": "REAL DEFAULT 0",
+            "is_expired": "INTEGER DEFAULT 0",
+            "fetched_at": "TEXT DEFAULT CURRENT_TIMESTAMP",
+        }.items():
+            try:
+                await db.execute(
+                    f"ALTER TABLE opportunities ADD COLUMN {column_name} {column_type}"
+                )
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_opportunities_session_id
+            ON opportunities(session_id)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_opportunities_profile_id
+            ON opportunities(profile_id)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_opportunities_fetched_at
+            ON opportunities(fetched_at)
             """
         )
         await db.execute(

@@ -164,4 +164,20 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS emails (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                gmail_message_id TEXT UNIQUE,
+                thread_id TEXT,
+                sender TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                snippet TEXT,
+                body TEXT,
+                received_at TEXT,
+                is_processed INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         await db.commit()

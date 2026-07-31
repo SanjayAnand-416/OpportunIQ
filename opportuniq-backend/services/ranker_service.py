@@ -64,7 +64,9 @@ class OpportunityListing(BaseModel):
 class DeduplicatedListing(BaseModel):
     """A canonical listing with duplicate postings merged into ``also_on``."""
 
-    opportunity: Opportunity = Field(description="Structured opportunity data of the canonical posting.")
+    opportunity: Opportunity = Field(
+        description="Structured opportunity data of the canonical posting."
+    )
     url: str = Field(description="Canonical (first-seen) posting URL.")
     source: str | None = Field(default=None, description="Source of the canonical posting.")
     also_on: list[str] = Field(
@@ -77,8 +79,12 @@ class ScoredOpportunity(BaseModel):
     """A deduplicated listing with its computed relevance score."""
 
     listing: DeduplicatedListing = Field(description="The scored listing.")
-    skill_score: float = Field(ge=0.0, le=1.0, description="Cosine similarity of required vs. student skills.")
-    urgency_score: float = Field(ge=0.0, le=1.0, description="1.0 = deadline is now, 0.0 = far away/none.")
+    skill_score: float = Field(
+        ge=0.0, le=1.0, description="Cosine similarity of required vs. student skills."
+    )
+    urgency_score: float = Field(
+        ge=0.0, le=1.0, description="1.0 = deadline is now, 0.0 = far away/none."
+    )
     final_score: float = Field(
         ge=0.0, le=1.0, description="0.7 * skill_score + 0.3 * urgency_score."
     )
@@ -123,7 +129,8 @@ def normalise_url(url: str) -> str:
     ]
     query = "&".join(sorted(kept_params))
 
-    return urlunsplit((parts.scheme.lower(), host, path, query, ""))
+    # Scheme (http vs https) never changes the identity of a posting.
+    return urlunsplit(("https", host, path, query, ""))
 
 
 def deduplicate(

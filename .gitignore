@@ -2,7 +2,11 @@
 .env.*
 !.env.example
 credentials.json
+google_credentials.json
 token.json
+token_*.json
+*.token.json
+oauth_tokens/
 *.db
 *.sqlite
 *.sqlite3

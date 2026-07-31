@@ -342,3 +342,33 @@ async def scan_gmail(
         session_id=session_id,
         status="started",
     )
+
+
+@router.delete("/disconnect", response_model=GmailDisconnectResponse)
+async def disconnect_gmail(profile_id: str = Query(...)) -> GmailDisconnectResponse:
+    """Disconnect Gmail for a profile without deleting historical data."""
+    profile = await _require_profile(profile_id)
+    public_profile_id = str(profile["profile_id"])
+
+    gmail_service = _load_gmail_service()
+    token_exists = _credentials_exist(gmail_service, public_profile_id)
+    if gmail_service is None and token_exists:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Gmail integration service is not available.",
+        )
+
+    if gmail_service is not None:
+        deleter = getattr(gmail_service, "delete_credentials", None)
+        if deleter is not None:
+            try:
+                deleter(public_profile_id)
+            except Exception as exc:
+                logger.warning("Gmail credential deletion failed safely: %s", exc)
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail="Gmail could not be disconnected safely.",
+                ) from exc
+
+    await mark_gmail_disconnected(public_profile_id)
+    return GmailDisconnectResponse(success=True, profile_id=public_profile_id)

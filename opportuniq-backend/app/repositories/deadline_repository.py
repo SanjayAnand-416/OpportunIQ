@@ -489,3 +489,20 @@ async def update_deadline(
         await db.commit()
 
     return await get_deadline_by_id(deadline_id)
+
+
+async def delete_deadline(deadline_id: str) -> bool:
+    """Delete one deadline from the registry."""
+    clean_deadline_id = _clean_optional_text(deadline_id)
+    if clean_deadline_id is None:
+        return False
+
+    async with get_db() as db:
+        cursor = await db.execute(
+            "DELETE FROM deadline_registry WHERE id = ?",
+            (clean_deadline_id,),
+        )
+        await db.commit()
+        deleted = cursor.rowcount
+        await cursor.close()
+    return bool(deleted)

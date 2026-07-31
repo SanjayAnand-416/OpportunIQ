@@ -7,7 +7,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi.responses import JSONResponse
 
 from app.models import (
     ManualProfileCreate,
@@ -106,6 +107,16 @@ def _find_missing_fields(profile: Mapping[str, Any]) -> list[str]:
 def _file_extension(filename: str) -> str:
     """Return the normalized extension for an uploaded file name."""
     return Path(filename).suffix.lower()
+
+
+def _resume_service_functions():
+    """Resolve teammate-owned ResumeAI functions without breaking app startup."""
+    try:
+        from app.services.resume_service import forward_to_resumeai, map_resumeai_to_profile
+    except ImportError as exc:
+        logger.info("ResumeAI service is unavailable: %s", exc)
+        return None, None
+    return forward_to_resumeai, map_resumeai_to_profile
 
 
 def _normalize_update_payload(updates: dict[str, Any]) -> dict[str, Any]:
@@ -209,4 +220,95 @@ async def patch_profile(profile_id: str, payload: ProfileUpdate) -> ProfileUpdat
         success=True,
         profile=profile_response,
         missing_fields=_find_missing_fields(updated_profile),
+    )
+
+
+@router.post(
+    "/upload",
+    response_model=ProfileCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def upload_resume_profile(
+    file: UploadFile = File(...),
+) -> ProfileCreateResponse | JSONResponse:
+    """Create a profile by forwarding an uploaded resume to ResumeAI."""
+    filename = file.filename or ""
+    if not filename:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Upload a PDF, DOC, or DOCX file.",
+        )
+
+    if _file_extension(filename) not in ALLOWED_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Upload a PDF, DOC, or DOCX file.",
+        )
+
+    content_type = file.content_type or ""
+    if content_type and content_type not in ALLOWED_CONTENT_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported file type. Upload a PDF, DOC, or DOCX file.",
+        )
+
+    try:
+        file_bytes = await file.read()
+    finally:
+        await file.close()
+
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty.",
+        )
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="File exceeds the 5 MB limit.",
+        )
+
+    forward_to_resumeai, map_resumeai_to_profile = _resume_service_functions()
+    if forward_to_resumeai is None or map_resumeai_to_profile is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={
+                "detail": "Resume extraction service is not available.",
+                "fallback": "manual",
+            },
+        )
+
+    response = await forward_to_resumeai(file_bytes, filename, content_type)
+    if not response.success or response.data is None:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "detail": "ResumeAI extraction failed.",
+                "fallback": "manual",
+            },
+        )
+
+    resume_data = response.data.model_dump()
+    profile_id = str(uuid.uuid4())
+    mapped = map_resumeai_to_profile(resume_data, profile_id=profile_id)
+    profile_payload = mapped.get("profile", {})
+    profile = _build_student_profile(
+        str(profile_payload.get("profile_id") or profile_id),
+        profile_payload,
+    )
+
+    try:
+        created_profile = await profile_repository.create_profile(profile)
+    except Exception as exc:
+        logger.exception("Unexpected database error while creating resume profile")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Profile could not be created.",
+        ) from exc
+
+    profile_response = ProfileResponse(**created_profile)
+    return ProfileCreateResponse(
+        profile_id=profile_response.profile_id,
+        profile=profile_response,
+        missing_fields=mapped.get("missing_fields") or _find_missing_fields(created_profile),
     )

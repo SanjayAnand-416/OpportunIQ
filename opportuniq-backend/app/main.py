@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
+from app.routers.opportunities import router as opportunities_router
 from app.routers.profile import router as profile_router
 from app.websocket_manager import connection_manager
 
@@ -40,6 +41,7 @@ app.add_middleware(
 )
 
 app.include_router(profile_router)
+app.include_router(opportunities_router)
 
 
 @app.get("/health", tags=["System"])

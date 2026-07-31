@@ -311,3 +311,43 @@ class AgentTraceEvent(BaseModel):
     @classmethod
     def validate_trace_text(cls, value: str) -> str:
         return _non_blank(value)
+
+
+class GmailScanRequest(BaseModel):
+    """Request body for triggering a Gmail deadline scan."""
+
+    profile_id: str
+
+    @field_validator("profile_id")
+    @classmethod
+    def validate_profile_id(cls, value: str) -> str:
+        return _non_blank(value)
+
+
+class GmailStatusResponse(BaseModel):
+    """Gmail connection status for a profile."""
+
+    connected: bool
+    profile_id: str
+    email: str | None = None
+    last_scanned: datetime | str | None = None
+    deadlines_found: int = Field(default=0, ge=0)
+
+
+class GmailScanResponse(BaseModel):
+    """Response returned when a Gmail scan is started."""
+
+    profile_id: str
+    session_id: str
+    status: str
+    emails_scanned: int = Field(default=0, ge=0)
+    deadlines_found: int = Field(default=0, ge=0)
+    needs_review: int = Field(default=0, ge=0)
+    errors: list[str] = Field(default_factory=list)
+
+
+class GmailDisconnectResponse(BaseModel):
+    """Response returned after disconnecting Gmail."""
+
+    success: bool
+    profile_id: str

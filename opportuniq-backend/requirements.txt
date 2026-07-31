@@ -1,159 +1,19 @@
-aiohappyeyeballs==2.7.1
-aiohttp==3.14.3
-aiosignal==1.4.0
-aiosqlite==0.22.1
-annotated-doc==0.0.5
-annotated-types==0.8.0
-anyio==4.14.2
-APScheduler==3.11.3
-archspec @ file:///home/conda/feedstock_root/build_artifacts/archspec_1737352602016/work
-attrs==26.1.0
-backports.zstd @ file:///Users/runner/miniforge3/conda-bld/bld/rattler-build_backports.zstd_1778594074/work
-beautifulsoup4==4.15.0
-boltons @ file:///home/conda/feedstock_root/build_artifacts/boltons_1749686179973/work
-Brotli @ file:///Users/runner/miniforge3/conda-bld/brotli-split_1764017116075/work
-certifi @ file:///home/conda/feedstock_root/build_artifacts/certifi_1779285033994/work/certifi
-cffi @ file:///Users/runner/miniforge3/conda-bld/cffi_1761203042365/work
-charset-normalizer @ file:///home/conda/feedstock_root/build_artifacts/charset-normalizer_1775127091311/work
-click==8.4.2
-cloudpickle==3.1.2
-conda @ file:///Users/runner/miniforge3/conda-bld/conda_1777457914752/work/conda-src
-conda-libmamba-solver @ file:///home/conda/feedstock_root/build_artifacts/conda-libmamba-solver_1778768113160/work/src
-conda-package-handling @ file:///home/conda/feedstock_root/build_artifacts/conda-package-handling_1736345463896/work
-conda_package_streaming @ file:///home/conda/feedstock_root/build_artifacts/conda-package-streaming_1751548120229/work
-cryptography==49.0.0
-distro @ file:///home/conda/feedstock_root/build_artifacts/distro_1734729835256/work
-docstring_parser==0.18.0
-duckdb==1.5.5
-Farama-Notifications==0.0.6
-fastapi==0.141.1
-filelock==3.32.0
-frozendict @ file:///Users/runner/miniforge3/conda-bld/frozendict_1763082883332/work
-frozenlist==1.8.0
-fsspec==2026.6.0
-google-api-core==2.33.0
-google-api-python-client==2.198.0
-google-auth==2.56.2
-google-auth-httplib2==0.4.0
-google-auth-oauthlib==1.4.0
-googleapis-common-protos==1.75.0
-groq==1.6.0
-gymnasium==1.3.0
-h11==0.16.0
-h2 @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_h2_1756364871/work
-hf-xet==1.5.2
-hpack @ file:///home/conda/feedstock_root/build_artifacts/hpack_1737618293087/work
-httpcore==1.0.9
-httplib2==0.32.0
-httpx==0.28.1
-httpx-sse==0.4.3
-huggingface_hub==1.26.0
-hyperframe @ file:///home/conda/feedstock_root/build_artifacts/hyperframe_1737618333194/work
-idna @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_idna_1779999227/work
-iniconfig==2.3.0
-instructor==1.15.4
-Jinja2==3.1.6
-jiter==0.14.0
-joblib==1.5.3
-jsonpatch @ file:///home/conda/feedstock_root/build_artifacts/jsonpatch_1733814567314/work
-jsonpointer @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_jsonpointer_1774311356/work
-langchain==1.3.14
-langchain-classic==1.0.8
-langchain-community==0.4.2
-langchain-core==1.5.3
-langchain-openai==1.4.1
-langchain-protocol==0.0.18
-langchain-text-splitters==1.1.2
-langgraph==1.2.10
-langgraph-checkpoint==4.1.1
-langgraph-prebuilt==1.1.0
-langgraph-sdk==0.4.2
-langsmith==0.10.14
-libmambapy @ file:///Users/runner/miniforge3/conda-bld/bld/rattler-build_libmambapy_1767884201/work/libmambapy
-lightgbm==4.7.0
-markdown-it-py==4.2.0
-markdownify==0.13.1
-MarkupSafe==3.0.3
-mdurl==0.1.2
-menuinst @ file:///Users/runner/miniforge3/conda-bld/menuinst_1765733155400/work
-mpmath==1.3.0
-msgpack @ file:///Users/runner/miniforge3/conda-bld/msgpack-python_1762504076140/work
-multidict==6.7.1
-narwhals==2.24.0
-networkx==3.6.1
--e git+https://github.com/SanjayAnand-416/neuro-symbolic-fraud-detection.git@19900b0b527ef7511a734cb8da7f7049cb95cdd5#egg=neuro_symbolic_fraud_detection
-numpy==2.5.1
-oauthlib==3.3.1
-openai==2.51.0
-orjson==3.11.9
-ormsgpack==1.12.2
-packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1777103621/work
-pandas==2.3.3
-platformdirs @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_platformdirs_1779972894/work
-pluggy @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pluggy_1764896838/work
-propcache==0.5.2
-proto-plus==1.28.2
-protobuf==7.35.1
-pyarrow==19.0.1
-pyasn1==0.6.4
-pyasn1_modules==0.4.2
-pycosat @ file:///Users/runner/miniforge3/conda-bld/pycosat_1757744740287/work
-pycparser @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pycparser_1779293633/work
-pydantic==2.13.4
-pydantic-settings==2.14.2
-pydantic_core==2.46.4
-Pygments==2.20.0
-pyparsing==3.3.2
-PySocks @ file:///home/conda/feedstock_root/build_artifacts/pysocks_1733217236728/work
-pytest==8.4.2
-python-dateutil==2.9.0.post0
-python-dotenv==1.2.2
-python-jobspy==1.1.82
-python-multipart==0.0.32
-pytz==2026.2
-PyYAML==6.0.3
-RapidFuzz==3.14.5
-regex==2026.7.19
-requests @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_requests_1778851103/work
-requests-oauthlib==2.0.0
-requests-toolbelt==1.0.0
-rich==14.3.4
-ruamel.yaml @ file:///Users/runner/miniforge3/conda-bld/bld/rattler-build_ruamel.yaml_1766175808/work
-ruamel.yaml.clib @ file:///Users/runner/miniforge3/conda-bld/bld/rattler-build_ruamel.yaml.clib_1766159543/work
-ruff==0.15.22
-safetensors==0.8.0
-scikit-learn==1.9.0
-scipy==1.18.0
-sentence-transformers==5.6.1
-setuptools==82.0.1
-shellingham==1.5.4
-six==1.17.0
-sniffio==1.3.1
-soupsieve==2.9.1
-SQLAlchemy==2.0.51
-stable_baselines3==2.9.0
-starlette==1.3.1
-sympy==1.14.0
-tavily-python==0.7.27
-tenacity==9.1.4
-threadpoolctl==3.6.0
-tiktoken==0.13.0
-tls-client==1.0.1
-tokenizers==0.22.2
-torch==2.13.0
-tqdm @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_tqdm_1770153424/work
-transformers==5.14.1
-truststore @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_truststore_1766494826/work
-typer==0.27.0
-typing-inspection==0.4.2
-typing_extensions==4.16.0
-tzdata==2026.3
-tzlocal==5.4.4
-uritemplate==4.2.0
-urllib3 @ file:///home/conda/feedstock_root/build_artifacts/urllib3_1778188571305/work
-uuid_utils==0.17.0
-uvicorn==0.52.0
-websockets==15.0.1
-xxhash==3.8.1
-yarl==1.24.5
-zstandard==0.25.0
+fastapi
+uvicorn
+python-dotenv
+pydantic
+aiosqlite
+python-multipart
+httpx
+apscheduler
+langgraph
+groq
+instructor
+tavily-python
+python-jobspy
+sentence-transformers
+rapidfuzz
+scikit-learn
+google-auth
+google-auth-oauthlib
+google-api-python-client

@@ -1,9 +1,19 @@
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 import aiosqlite
 
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", "opportuniq.db")
+
+
+@asynccontextmanager
+async def get_db() -> AsyncIterator[aiosqlite.Connection]:
+    """Yield a SQLite connection configured for dictionary-like rows."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        yield db
 
 
 async def init_db() -> None:
@@ -15,9 +25,16 @@ async def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT,
                 email TEXT,
+                year_of_study TEXT,
+                graduation_year INTEGER,
+                degree TEXT,
+                college TEXT,
+                target_roles TEXT,
                 phone TEXT,
                 education TEXT,
                 skills TEXT,
+                location TEXT,
+                opportunity_type TEXT,
                 experience TEXT,
                 projects TEXT,
                 raw_resume_text TEXT,
@@ -26,6 +43,22 @@ async def init_db() -> None:
             )
             """
         )
+        for column_name, column_type in {
+            "year_of_study": "TEXT",
+            "graduation_year": "INTEGER",
+            "degree": "TEXT",
+            "college": "TEXT",
+            "target_roles": "TEXT",
+            "location": "TEXT",
+            "opportunity_type": "TEXT",
+        }.items():
+            try:
+                await db.execute(
+                    f"ALTER TABLE student_profiles ADD COLUMN {column_name} {column_type}"
+                )
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS opportunities (

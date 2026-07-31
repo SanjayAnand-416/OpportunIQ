@@ -306,3 +306,39 @@ async def gmail_status(profile_id: str = Query(...)) -> GmailStatusResponse:
         last_scanned=metadata.get("last_scanned") if metadata else None,
         deadlines_found=int(metadata.get("deadlines_found") or 0) if metadata else 0,
     )
+
+
+@router.post(
+    "/scan",
+    response_model=GmailScanResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def scan_gmail(
+    payload: GmailScanRequest,
+    background_tasks: BackgroundTasks,
+) -> GmailScanResponse:
+    """Trigger a teammate-owned Guardian Agent Gmail scan."""
+    profile = await _require_profile(payload.profile_id)
+    public_profile_id = str(profile["profile_id"])
+
+    gmail_service = _load_gmail_service()
+    if not _credentials_exist(gmail_service, public_profile_id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Gmail account is not connected.",
+        )
+
+    guardian_agent = _load_guardian_agent()
+    if guardian_agent is None or getattr(guardian_agent, "run_guardian_agent", None) is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Guardian Agent is not available.",
+        )
+
+    session_id = str(uuid.uuid4())
+    background_tasks.add_task(run_guardian_scan_task, public_profile_id, session_id)
+    return GmailScanResponse(
+        profile_id=public_profile_id,
+        session_id=session_id,
+        status="started",
+    )

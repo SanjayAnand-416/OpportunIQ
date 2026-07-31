@@ -151,6 +151,20 @@ async def init_db() -> None:
         )
         await db.execute(
             """
+            CREATE TABLE IF NOT EXISTS gmail_connections (
+                profile_id TEXT PRIMARY KEY,
+                email TEXT,
+                connected BOOLEAN DEFAULT FALSE,
+                last_scanned TIMESTAMP,
+                deadlines_found INTEGER DEFAULT 0,
+                needs_review INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS reminders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 deadline_id INTEGER,

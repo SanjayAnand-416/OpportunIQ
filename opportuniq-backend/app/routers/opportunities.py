@@ -336,6 +336,104 @@ async def run_discovery_pipeline(
     return top_results, errors
 
 
+async def execute_and_persist_discovery(
+    session_id: str,
+    profile: dict[str, Any],
+) -> None:
+    """Run discovery in the background and persist ranked results."""
+    try:
+        ranked_results, errors = await run_discovery_pipeline(
+            session_id=session_id,
+            profile=profile,
+        )
+        if not ranked_results:
+            await emit_trace(
+                session_id,
+                "pipeline",
+                "error",
+                "Opportunity discovery finished without usable results",
+                {"errors": errors},
+            )
+            return
+
+        await delete_opportunities_by_session(session_id)
+        saved = await save_opportunities(
+            session_id=session_id,
+            profile_id=str(profile["profile_id"]),
+            opportunities=ranked_results,
+        )
+        await emit_trace(
+            session_id,
+            "persistence",
+            "complete",
+            "Opportunities saved",
+            {"count": len(saved)},
+        )
+        await emit_trace(
+            session_id,
+            "pipeline",
+            "complete",
+            "Opportunity discovery complete",
+            {"result_count": len(saved), "errors": errors},
+        )
+    except Exception as exc:
+        logger.exception("Fatal opportunity discovery failure")
+        await emit_trace(
+            session_id,
+            "pipeline",
+            "error",
+            "Opportunity discovery failed",
+            {"error": exc.__class__.__name__},
+        )
+
+
+@router.post("/search", response_model=OpportunitySearchResponse)
+async def search_opportunities(
+    payload: OpportunitySearchRequest,
+    background_tasks: BackgroundTasks,
+) -> OpportunitySearchResponse:
+    """Start opportunity discovery for a public profile ID."""
+    profile = await get_profile_by_id(payload.profile_id)
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+    if not _unique_strings(profile.get("target_roles")):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Profile has no target roles.",
+        )
+
+    if not payload.force_refresh:
+        cached = await get_cached_discovery(payload.profile_id, max_age_minutes=30)
+        if cached is not None:
+            cached_session_id, cached_results = cached
+            await emit_trace(
+                cached_session_id,
+                "cache",
+                "complete",
+                "Using cached discovery results",
+                {"count": len(cached_results)},
+            )
+            return OpportunitySearchResponse(
+                session_id=cached_session_id,
+                status="complete",
+                cached=True,
+                result_count=len(cached_results),
+            )
+
+    session_id = str(uuid.uuid4())
+    background_tasks.add_task(execute_and_persist_discovery, session_id, profile)
+    return OpportunitySearchResponse(
+        session_id=session_id,
+        status="started",
+        cached=False,
+        result_count=0,
+        errors=[],
+    )
+
+
 @router.get("", response_model=OpportunityListResponse)
 async def list_opportunities(
     session_id: str | None = Query(default=None),

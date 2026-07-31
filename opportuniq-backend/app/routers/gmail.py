@@ -78,3 +78,53 @@ async def _require_profile(profile_id: str) -> dict[str, Any]:
             detail="Profile not found",
         )
     return profile
+
+
+def _build_authorization_url(gmail_service: Any, profile_id: str, state: str) -> str:
+    """Build a Google authorization URL using the teammate service interface."""
+    get_authorization_url = getattr(gmail_service, "get_authorization_url", None)
+    if get_authorization_url is not None:
+        return get_authorization_url(profile_id=profile_id, state=state)
+
+    get_oauth_flow = getattr(gmail_service, "get_oauth_flow", None)
+    if get_oauth_flow is None:
+        raise RuntimeError("Gmail service does not expose an OAuth URL interface")
+
+    flow = get_oauth_flow()
+    authorization_url, _ = flow.authorization_url(
+        access_type="offline",
+        include_granted_scopes="true",
+        prompt="consent",
+        state=state,
+    )
+    return authorization_url
+
+
+@router.get("/connect")
+async def connect_gmail(profile_id: str = Query(...)) -> RedirectResponse:
+    """Redirect a profile owner to Google's Gmail OAuth consent screen."""
+    profile = await _require_profile(profile_id)
+    public_profile_id = str(profile["profile_id"])
+
+    gmail_service = _load_gmail_service()
+    if gmail_service is None:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Gmail integration service is not available.",
+        )
+
+    state = oauth_state_manager.create_state(public_profile_id)
+    try:
+        authorization_url = _build_authorization_url(
+            gmail_service,
+            public_profile_id,
+            state,
+        )
+    except Exception as exc:
+        logger.warning("Unable to build Gmail authorization URL: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Gmail integration service is not available.",
+        ) from exc
+
+    return RedirectResponse(url=authorization_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)

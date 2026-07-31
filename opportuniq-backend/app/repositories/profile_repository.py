@@ -26,6 +26,21 @@ PROFILE_COLUMNS = (
     "updated_at",
 )
 
+UPDATE_FIELDS = {
+    "name",
+    "email",
+    "year_of_study",
+    "graduation_year",
+    "degree",
+    "college",
+    "target_roles",
+    "skills",
+    "location",
+    "opportunity_type",
+}
+
+LIST_FIELDS = {"skills", "target_roles"}
+
 
 def _serialize_list(value: list[str] | None) -> str:
     """Serialize a list field for SQLite storage."""
@@ -120,3 +135,38 @@ async def get_profile_by_id(profile_id: str) -> dict[str, Any] | None:
         row = await cursor.fetchone()
         await cursor.close()
     return row_to_profile(row)
+
+
+async def update_profile(profile_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:
+    """Apply allowlisted partial updates and return the updated profile."""
+    existing_profile = await get_profile_by_id(profile_id)
+    if existing_profile is None:
+        return None
+
+    clean_updates: dict[str, Any] = {}
+    for field_name, value in updates.items():
+        if field_name not in UPDATE_FIELDS:
+            continue
+        if field_name in LIST_FIELDS:
+            clean_updates[field_name] = _serialize_list(value)
+        else:
+            clean_updates[field_name] = value
+
+    if not clean_updates:
+        return existing_profile
+
+    set_clause = ", ".join(f"{field_name} = ?" for field_name in clean_updates)
+    values = [*clean_updates.values(), profile_id]
+
+    async with get_db() as db:
+        await db.execute(
+            f"""
+            UPDATE student_profiles
+            SET {set_clause}, updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            values,
+        )
+        await db.commit()
+
+    return await get_profile_by_id(profile_id)

@@ -36,3 +36,36 @@ Interactive API documentation:
 ```text
 http://localhost:8000/docs
 ```
+
+## Gmail OAuth
+
+Gmail integration uses read-only access:
+
+```text
+https://www.googleapis.com/auth/gmail.readonly
+```
+
+Create OAuth credentials in Google Cloud, enable the Gmail API, and set this redirect URI:
+
+```text
+http://localhost:8000/api/gmail/callback
+```
+
+Required local configuration:
+
+```text
+GOOGLE_CREDENTIALS_FILE=credentials.json
+GOOGLE_TOKEN_FILE=token.json
+FRONTEND_URL=http://localhost:5173
+```
+
+Local demo sequence:
+
+```text
+GET /api/gmail/connect?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/gmail/status?profile_id=<PUBLIC_PROFILE_UUID>
+POST /api/gmail/scan
+DELETE /api/gmail/disconnect?profile_id=<PUBLIC_PROFILE_UUID>
+```
+
+`credentials.json`, OAuth tokens, `.env`, and database files must never be committed. If `app/services/gmail_service.py` or `app/agents/guardian_agent.py` is not available yet, Gmail routes return safe guarded responses such as HTTP 503 instead of breaking backend startup.

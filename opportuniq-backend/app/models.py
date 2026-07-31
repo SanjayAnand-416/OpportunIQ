@@ -14,6 +14,18 @@ OPPORTUNITY_TYPES = {
     "all": "All",
 }
 
+DEADLINE_EVENT_TYPES = {
+    "interview": "interview",
+    "submission": "submission",
+    "offer_acceptance": "offer_acceptance",
+    "offer acceptance": "offer_acceptance",
+    "application": "application",
+    "assessment": "assessment",
+    "registration": "registration",
+    "joining": "joining",
+    "other": "other",
+}
+
 
 def _strip_text(value: str | None) -> str | None:
     if value is None:
@@ -55,6 +67,18 @@ def _clamp_score(value: float | int | None) -> float:
     if value is None:
         return 0.0
     return max(0.0, min(float(value), 1.0))
+
+
+def _normalize_deadline_event_type(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = DEADLINE_EVENT_TYPES.get(value.strip().lower().replace("-", "_"))
+    if normalized is None:
+        raise ValueError(
+            "Event type must be interview, submission, offer_acceptance, "
+            "application, assessment, registration, joining, or other."
+        )
+    return normalized
 
 
 class ResumeAIData(BaseModel):
@@ -311,6 +335,131 @@ class AgentTraceEvent(BaseModel):
     @classmethod
     def validate_trace_text(cls, value: str) -> str:
         return _non_blank(value)
+
+
+class DeadlineCreate(BaseModel):
+    """Request body for creating a manual deadline."""
+
+    profile_id: str
+    opportunity_id: str | None = None
+    title: str
+    organization: str | None = None
+    deadline_datetime: datetime
+    event_type: str = "other"
+    action_required: str | None = None
+    notes: str | None = None
+
+    @field_validator("profile_id", "title")
+    @classmethod
+    def validate_required_text(cls, value: str) -> str:
+        return _non_blank(value)
+
+    @field_validator("opportunity_id", "organization", "action_required", "notes")
+    @classmethod
+    def strip_optional_text(cls, value: str | None) -> str | None:
+        return _strip_text(value)
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_event_type(cls, value: str) -> str:
+        return _normalize_deadline_event_type(value) or "other"
+
+
+class DeadlineUpdate(BaseModel):
+    """Request body for updating a deadline."""
+
+    opportunity_id: str | None = None
+    title: str | None = None
+    organization: str | None = None
+    deadline_datetime: datetime | None = None
+    event_type: str | None = None
+    action_required: str | None = None
+    notes: str | None = None
+    needs_review: bool | None = None
+    is_completed: bool | None = None
+    is_cancelled: bool | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _non_blank(value)
+
+    @field_validator("opportunity_id", "organization", "action_required", "notes")
+    @classmethod
+    def strip_optional_text(cls, value: str | None) -> str | None:
+        return _strip_text(value)
+
+    @field_validator("event_type")
+    @classmethod
+    def validate_optional_event_type(cls, value: str | None) -> str | None:
+        return _normalize_deadline_event_type(value)
+
+
+class DeadlineResponse(BaseModel):
+    """Deadline registry item returned by the Deadline API."""
+
+    deadline_id: str
+    profile_id: str
+    opportunity_id: str | None = None
+    title: str
+    organization: str | None = None
+    deadline_datetime: datetime | str | None = None
+    event_type: str | None = None
+    action_required: str | None = None
+    notes: str | None = None
+    source: str
+    gmail_message_id: str | None = None
+    confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    needs_review: bool = False
+    is_completed: bool = False
+    is_cancelled: bool = False
+    status: str
+    days_remaining: int | None = None
+    created_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+
+
+class DeadlineCreateResponse(BaseModel):
+    """Response returned after creating a deadline."""
+
+    success: bool
+    deadline: DeadlineResponse
+    reminders_scheduled: list[str] = Field(default_factory=list)
+
+
+class DeadlineUpdateResponse(BaseModel):
+    """Response returned after updating a deadline."""
+
+    success: bool
+    deadline: DeadlineResponse
+
+
+class DeadlineListResponse(BaseModel):
+    """List response for deadline registry queries."""
+
+    deadlines: list[DeadlineResponse]
+    count: int
+    profile_id: str | None = None
+
+
+class DeadlineDeleteResponse(BaseModel):
+    """Response returned after deleting a deadline."""
+
+    success: bool
+    deadline_id: str
+
+
+class CalendarEventResponse(BaseModel):
+    """Calendar event projection for a deadline."""
+
+    id: str
+    title: str
+    start: datetime | str
+    end: datetime | str
+    color: str
+    deadline: DeadlineResponse
 
 
 class GmailScanRequest(BaseModel):

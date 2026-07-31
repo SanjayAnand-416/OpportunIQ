@@ -132,3 +132,21 @@ async def create_manual_profile(payload: ManualProfileCreate) -> ProfileCreateRe
         profile=profile_response,
         missing_fields=[],
     )
+
+
+@router.get("/{profile_id}", response_model=ProfileResponse)
+async def get_profile(profile_id: str) -> ProfileResponse:
+    """Retrieve a student profile by ID."""
+    if not profile_id.strip():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+
+    profile = await profile_repository.get_profile_by_id(profile_id.strip())
+    if profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+    return ProfileResponse(**profile)

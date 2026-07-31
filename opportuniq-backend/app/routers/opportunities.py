@@ -17,6 +17,7 @@ from app.models import (
     OpportunitySearchResponse,
 )
 from app.repositories.opportunity_repository import (
+    delete_opportunities_by_session,
     get_cached_discovery,
     get_latest_opportunities_by_profile,
     get_opportunities_by_session,
@@ -122,6 +123,217 @@ async def _call_maybe_async(function: Callable[..., Any], *args: Any, timeout: f
     if inspect.iscoroutinefunction(function):
         return await asyncio.wait_for(function(*args), timeout=timeout)
     return await asyncio.wait_for(asyncio.to_thread(function, *args), timeout=timeout)
+
+
+def _unique_strings(values: Any) -> list[str]:
+    seen: set[str] = set()
+    result: list[str] = []
+    for value in _as_list(values):
+        lookup = value.lower()
+        if lookup not in seen:
+            seen.add(lookup)
+            result.append(value)
+    return result
+
+
+def _clamp_score(value: Any) -> float:
+    try:
+        return max(0.0, min(float(value), 1.0))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _parse_deadline(value: Any) -> date | None:
+    if value is None or isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    for parser in (datetime.fromisoformat, date.fromisoformat):
+        try:
+            parsed = parser(text.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        return parsed.date() if isinstance(parsed, datetime) else parsed
+    return None
+
+
+def _is_expired(value: Any) -> bool:
+    parsed = _parse_deadline(value)
+    return parsed is not None and parsed < date.today()
+
+
+def _fallback_deduplicate(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    seen_urls: set[str] = set()
+    deduped: list[dict[str, Any]] = []
+    for result in results:
+        url = str(result.get("url") or "").strip().lower()
+        if not url or url in seen_urls:
+            continue
+        seen_urls.add(url)
+        deduped.append(result)
+    return deduped
+
+
+def _fallback_score(opportunity: dict[str, Any], student_skills: list[str]) -> float:
+    required = {skill.lower() for skill in _as_list(opportunity.get("skills_required"))}
+    skills = {skill.lower() for skill in student_skills}
+    if not required or not skills:
+        return 0.5
+    return len(required & skills) / max(len(required), 1)
+
+
+async def run_discovery_pipeline(
+    *,
+    session_id: str,
+    profile: dict[str, Any],
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Run opportunity discovery and return ranked, unexpired results."""
+    errors: list[str] = []
+    await emit_trace(session_id, "profile", "running", "Loading student profile")
+
+    target_roles = _unique_strings(profile.get("target_roles"))
+    student_skills = _as_list(profile.get("skills"))
+    location = str(profile.get("location") or "India").strip() or "India"
+    opportunity_type = profile.get("opportunity_type")
+    profile_id = str(profile.get("profile_id") or "").strip()
+    if not profile_id or not target_roles:
+        await emit_trace(session_id, "profile", "error", "Profile is missing target roles")
+        return [], ["Profile has no usable target roles."]
+
+    await emit_trace(
+        session_id,
+        "profile",
+        "complete",
+        "Student profile loaded",
+        {"target_roles": target_roles, "skills_count": len(student_skills)},
+    )
+
+    raw_results: list[dict[str, Any]] = []
+    for role in target_roles:
+        try:
+            raw_results.extend(
+                await jobspy_service.search_jobs(role, location, opportunity_type)
+            )
+        except Exception as exc:
+            logger.warning("JobSpy role search failed: %s", exc)
+            errors.append(f"JobSpy search failed for {role}.")
+    await emit_trace(
+        session_id,
+        "jobspy",
+        "complete",
+        "JobSpy search complete",
+        {"count": len(raw_results)},
+    )
+
+    tavily_search = _resolve_service_function("tavily_service", "search_hackathons_and_portals")
+    tavily_count = 0
+    if tavily_search is None:
+        errors.append("Tavily service unavailable.")
+    else:
+        for role in target_roles:
+            try:
+                tavily_results = await _call_maybe_async(tavily_search, role, student_skills)
+                if isinstance(tavily_results, list):
+                    raw_results.extend(tavily_results)
+                    tavily_count += len(tavily_results)
+            except Exception as exc:
+                logger.warning("Tavily search failed: %s", exc)
+                errors.append(f"Tavily search failed for {role}.")
+    await emit_trace(
+        session_id,
+        "tavily",
+        "complete",
+        "Tavily search complete",
+        {"count": tavily_count},
+    )
+
+    if not raw_results:
+        await emit_trace(session_id, "pipeline", "error", "No discovery results were found")
+        return [], errors or ["No discovery results were found."]
+
+    extract_opportunity = _resolve_service_function("groq_service", "extract_opportunity")
+    extracted: list[dict[str, Any]] = []
+    for raw in raw_results[:MAX_EXTRACTION_RESULTS]:
+        try:
+            if extract_opportunity is None:
+                normalized = _normalize_extracted_opportunity(raw, raw)
+            else:
+                extracted_item = await _call_maybe_async(
+                    extract_opportunity,
+                    _normalize_raw_result(raw),
+                    timeout=15.0,
+                )
+                normalized = _normalize_extracted_opportunity(extracted_item, raw)
+            if normalized is not None:
+                extracted.append(normalized)
+        except Exception as exc:
+            logger.warning("Opportunity extraction failed: %s", exc)
+            errors.append("One opportunity extraction failed.")
+    await emit_trace(
+        session_id,
+        "groq",
+        "complete",
+        "Structured extraction complete",
+        {"count": len(extracted), "fallback": extract_opportunity is None},
+    )
+
+    if not extracted:
+        await emit_trace(session_id, "pipeline", "error", "No structured opportunities remained")
+        return [], errors or ["No structured opportunities remained."]
+
+    deduplicate = _resolve_service_function("ranker_service", "deduplicate")
+    try:
+        deduped = (
+            await _call_maybe_async(deduplicate, extracted)
+            if deduplicate is not None
+            else _fallback_deduplicate(extracted)
+        )
+    except Exception as exc:
+        logger.warning("Deduplication failed: %s", exc)
+        errors.append("Ranker deduplication failed; used fallback.")
+        deduped = _fallback_deduplicate(extracted)
+    await emit_trace(
+        session_id,
+        "ranker",
+        "complete",
+        "Deduplication complete",
+        {"count": len(deduped), "fallback": deduplicate is None},
+    )
+
+    score = _resolve_service_function("ranker_service", "score")
+    ranked: list[dict[str, Any]] = []
+    for opportunity in deduped:
+        if _is_expired(opportunity.get("deadline")):
+            continue
+        try:
+            combined = (
+                await _call_maybe_async(score, opportunity, student_skills, timeout=10.0)
+                if score is not None
+                else _fallback_score(opportunity, student_skills)
+            )
+        except Exception as exc:
+            logger.warning("Opportunity scoring failed: %s", exc)
+            combined = _fallback_score(opportunity, student_skills)
+            errors.append("One opportunity score failed; used fallback.")
+        match_score = _clamp_score(opportunity.get("match_score", combined))
+        urgency_score = _clamp_score(opportunity.get("urgency_score", 0.5))
+        opportunity["match_score"] = match_score
+        opportunity["urgency_score"] = urgency_score
+        opportunity["combined_score"] = _clamp_score(combined)
+        opportunity["is_expired"] = False
+        ranked.append(opportunity)
+
+    ranked.sort(key=lambda item: item.get("combined_score", 0.0), reverse=True)
+    top_results = ranked[:15]
+    await emit_trace(
+        session_id,
+        "ranker",
+        "complete",
+        "Ranking complete",
+        {"count": len(top_results), "fallback": score is None},
+    )
+    return top_results, errors
 
 
 @router.get("", response_model=OpportunityListResponse)

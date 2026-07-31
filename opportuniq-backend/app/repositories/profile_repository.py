@@ -12,6 +12,7 @@ from app.models import StudentProfile
 
 PROFILE_COLUMNS = (
     "id",
+    "profile_id",
     "name",
     "email",
     "year_of_study",
@@ -69,7 +70,8 @@ def row_to_profile(row: aiosqlite.Row | Mapping[str, Any] | None) -> dict[str, A
 
     row_data = dict(row)
     profile = {column: row_data.get(column) for column in PROFILE_COLUMNS if column in row_data}
-    profile["profile_id"] = str(profile.pop("id"))
+    internal_id = profile.pop("id", None)
+    profile["profile_id"] = str(profile.get("profile_id") or internal_id)
     profile["skills"] = _deserialize_list(profile.get("skills"))
     profile["target_roles"] = _deserialize_list(profile.get("target_roles"))
     return profile
@@ -89,6 +91,7 @@ async def create_profile(profile: StudentProfile) -> dict[str, Any]:
         cursor = await db.execute(
             """
             INSERT INTO student_profiles (
+                profile_id,
                 name,
                 email,
                 year_of_study,
@@ -100,9 +103,10 @@ async def create_profile(profile: StudentProfile) -> dict[str, Any]:
                 location,
                 opportunity_type
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                _profile_value(profile, "profile_id"),
                 _profile_value(profile, "name", "full_name"),
                 profile.email,
                 profile.year_of_study,
@@ -116,7 +120,7 @@ async def create_profile(profile: StudentProfile) -> dict[str, Any]:
             ),
         )
         await db.commit()
-        profile_id = str(cursor.lastrowid)
+        profile_id = str(_profile_value(profile, "profile_id") or cursor.lastrowid)
         await cursor.close()
 
     created_profile = await get_profile_by_id(profile_id)
@@ -129,8 +133,12 @@ async def get_profile_by_id(profile_id: str) -> dict[str, Any] | None:
     """Load a student profile by API profile ID."""
     async with get_db() as db:
         cursor = await db.execute(
-            f"SELECT {', '.join(PROFILE_COLUMNS)} FROM student_profiles WHERE id = ?",
-            (profile_id,),
+            f"""
+            SELECT {', '.join(PROFILE_COLUMNS)}
+            FROM student_profiles
+            WHERE profile_id = ? OR id = ?
+            """,
+            (profile_id, profile_id),
         )
         row = await cursor.fetchone()
         await cursor.close()

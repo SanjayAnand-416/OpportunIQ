@@ -23,6 +23,7 @@ async def init_db() -> None:
             """
             CREATE TABLE IF NOT EXISTS student_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                profile_id TEXT UNIQUE,
                 name TEXT,
                 email TEXT,
                 year_of_study TEXT,
@@ -44,6 +45,7 @@ async def init_db() -> None:
             """
         )
         for column_name, column_type in {
+            "profile_id": "TEXT UNIQUE",
             "year_of_study": "TEXT",
             "graduation_year": "INTEGER",
             "degree": "TEXT",

@@ -44,6 +44,19 @@ def _normalize_opportunity_type(value: str | None) -> str | None:
     return normalized
 
 
+def _non_blank(value: str) -> str:
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError("Value cannot be blank.")
+    return stripped
+
+
+def _clamp_score(value: float | int | None) -> float:
+    if value is None:
+        return 0.0
+    return max(0.0, min(float(value), 1.0))
+
+
 class ResumeAIData(BaseModel):
     """Structured profile data returned by the ResumeAI service."""
 
@@ -222,3 +235,79 @@ class ProfileUpdateResponse(BaseModel):
     success: bool
     profile: ProfileResponse
     missing_fields: list[str] = Field(default_factory=list)
+
+
+class OpportunitySearchRequest(BaseModel):
+    """Request body for opportunity discovery."""
+
+    profile_id: str
+    force_refresh: bool = False
+
+    @field_validator("profile_id")
+    @classmethod
+    def validate_profile_id(cls, value: str) -> str:
+        return _non_blank(value)
+
+
+class OpportunitySearchResponse(BaseModel):
+    """Response returned when opportunity discovery starts or uses cache."""
+
+    session_id: str
+    status: str
+    cached: bool = False
+    result_count: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
+class OpportunityResponse(BaseModel):
+    """Persisted opportunity returned by the Opportunity API."""
+
+    opportunity_id: str
+    session_id: str
+    profile_id: str
+    title: str
+    company: str
+    platform: str
+    url: str
+    location: str | None = None
+    deadline: date | str | None = None
+    stipend_or_prize: str | None = None
+    eligibility: str | None = None
+    skills_required: list[str] = Field(default_factory=list)
+    description: str | None = None
+    also_on: list[str] = Field(default_factory=list)
+    match_score: float = 0.0
+    urgency_score: float = 0.0
+    combined_score: float = 0.0
+    is_expired: bool = False
+    fetched_at: datetime | str | None = None
+
+    @field_validator("match_score", "urgency_score", "combined_score", mode="before")
+    @classmethod
+    def validate_scores(cls, value: float | int | None) -> float:
+        return _clamp_score(value)
+
+
+class OpportunityListResponse(BaseModel):
+    """List response for persisted opportunities."""
+
+    opportunities: list[OpportunityResponse]
+    count: int
+    session_id: str | None = None
+    profile_id: str | None = None
+
+
+class AgentTraceEvent(BaseModel):
+    """Trace event streamed to the frontend while discovery runs."""
+
+    session_id: str
+    agent: str
+    status: str
+    message: str
+    timestamp: datetime | str
+    metadata: dict = Field(default_factory=dict)
+
+    @field_validator("session_id", "agent", "status", "message")
+    @classmethod
+    def validate_trace_text(cls, value: str) -> str:
+        return _non_blank(value)

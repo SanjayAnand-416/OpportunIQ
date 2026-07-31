@@ -122,3 +122,53 @@ async def _call_maybe_async(function: Callable[..., Any], *args: Any, timeout: f
     if inspect.iscoroutinefunction(function):
         return await asyncio.wait_for(function(*args), timeout=timeout)
     return await asyncio.wait_for(asyncio.to_thread(function, *args), timeout=timeout)
+
+
+@router.get("", response_model=OpportunityListResponse)
+async def list_opportunities(
+    session_id: str | None = Query(default=None),
+    profile_id: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+) -> OpportunityListResponse:
+    """List persisted opportunities by session or latest profile session."""
+    if session_id and profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide either session_id or profile_id, not both.",
+        )
+    if not session_id and not profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Provide session_id or profile_id.",
+        )
+
+    if session_id:
+        clean_session_id = session_id.strip()
+        opportunities = await get_opportunities_by_session(clean_session_id, limit=limit)
+        return OpportunityListResponse(
+            opportunities=[OpportunityResponse(**item) for item in opportunities],
+            count=len(opportunities),
+            session_id=clean_session_id,
+        )
+
+    clean_profile_id = (profile_id or "").strip()
+    opportunities = await get_latest_opportunities_by_profile(clean_profile_id, limit=limit)
+    response_session_id = opportunities[0]["session_id"] if opportunities else None
+    return OpportunityListResponse(
+        opportunities=[OpportunityResponse(**item) for item in opportunities],
+        count=len(opportunities),
+        session_id=response_session_id,
+        profile_id=clean_profile_id,
+    )
+
+
+@router.get("/{opportunity_id}", response_model=OpportunityResponse)
+async def get_opportunity(opportunity_id: str) -> OpportunityResponse:
+    """Return one persisted opportunity."""
+    opportunity = await get_opportunity_by_id(opportunity_id.strip())
+    if opportunity is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Opportunity not found",
+        )
+    return OpportunityResponse(**opportunity)

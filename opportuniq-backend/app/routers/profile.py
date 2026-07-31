@@ -9,7 +9,14 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.models import ManualProfileCreate, ProfileCreateResponse, ProfileResponse, StudentProfile
+from app.models import (
+    ManualProfileCreate,
+    ProfileCreateResponse,
+    ProfileResponse,
+    ProfileUpdate,
+    ProfileUpdateResponse,
+    StudentProfile,
+)
 from app.repositories import profile_repository
 
 
@@ -101,6 +108,33 @@ def _file_extension(filename: str) -> str:
     return Path(filename).suffix.lower()
 
 
+def _normalize_update_payload(updates: dict[str, Any]) -> dict[str, Any]:
+    """Normalize patch payload values before persistence."""
+    normalized: dict[str, Any] = {}
+    for field_name, value in updates.items():
+        if field_name in {"skills", "target_roles"}:
+            clean_values = _dedupe_strings(value)
+            if not clean_values:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"{field_name} cannot be empty.",
+                )
+            normalized[field_name] = clean_values
+        elif field_name in {"name", "location", "opportunity_type"}:
+            clean_value = _clean_text(value)
+            if clean_value is None or not clean_value:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"{field_name} cannot be empty.",
+                )
+            normalized[field_name] = clean_value
+        elif isinstance(value, str):
+            normalized[field_name] = value.strip()
+        else:
+            normalized[field_name] = value
+    return normalized
+
+
 @router.post(
     "/manual",
     response_model=ProfileCreateResponse,
@@ -150,3 +184,29 @@ async def get_profile(profile_id: str) -> ProfileResponse:
             detail="Profile not found",
         )
     return ProfileResponse(**profile)
+
+
+@router.patch("/{profile_id}", response_model=ProfileUpdateResponse)
+async def patch_profile(profile_id: str, payload: ProfileUpdate) -> ProfileUpdateResponse:
+    """Partially update a student profile."""
+    clean_profile_id = profile_id.strip()
+    if not clean_profile_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+
+    updates = _normalize_update_payload(payload.model_dump(exclude_unset=True))
+    updated_profile = await profile_repository.update_profile(clean_profile_id, updates)
+    if updated_profile is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Profile not found",
+        )
+
+    profile_response = ProfileResponse(**updated_profile)
+    return ProfileUpdateResponse(
+        success=True,
+        profile=profile_response,
+        missing_fields=_find_missing_fields(updated_profile),
+    )

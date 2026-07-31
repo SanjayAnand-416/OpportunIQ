@@ -104,14 +104,19 @@ async def create_profile(profile: StudentProfile) -> dict[str, Any]:
         profile_id = str(cursor.lastrowid)
         await cursor.close()
 
+    created_profile = await get_profile_by_id(profile_id)
+    if created_profile is None:
+        raise RuntimeError("Created profile could not be loaded")
+    return created_profile
+
+
+async def get_profile_by_id(profile_id: str) -> dict[str, Any] | None:
+    """Load a student profile by API profile ID."""
+    async with get_db() as db:
         cursor = await db.execute(
             f"SELECT {', '.join(PROFILE_COLUMNS)} FROM student_profiles WHERE id = ?",
             (profile_id,),
         )
         row = await cursor.fetchone()
         await cursor.close()
-
-    created_profile = row_to_profile(row)
-    if created_profile is None:
-        raise RuntimeError("Created profile could not be loaded")
-    return created_profile
+    return row_to_profile(row)

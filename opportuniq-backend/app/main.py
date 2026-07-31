@@ -7,6 +7,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
+from app.routers.deadlines import router as deadlines_router
 from app.routers.gmail import router as gmail_router
 from app.routers.opportunities import router as opportunities_router
 from app.routers.profile import router as profile_router
@@ -44,6 +45,7 @@ app.add_middleware(
 app.include_router(profile_router)
 app.include_router(opportunities_router)
 app.include_router(gmail_router)
+app.include_router(deadlines_router)
 
 
 @app.get("/health", tags=["System"])

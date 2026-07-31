@@ -296,3 +296,125 @@ async def create_deadline(
     if created_deadline is None:
         raise RuntimeError("Created deadline could not be loaded.")
     return created_deadline
+
+
+def _sort_deadlines_by_datetime(deadlines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return sorted(
+        deadlines,
+        key=lambda item: (
+            _to_utc_datetime(item.get("deadline_datetime")) is None,
+            _to_utc_datetime(item.get("deadline_datetime")) or datetime.max.replace(tzinfo=UTC),
+            str(item.get("created_at") or ""),
+        ),
+    )
+
+
+async def list_deadlines(
+    *,
+    profile_id: str,
+    include_completed: bool = True,
+    include_cancelled: bool = False,
+    needs_review: bool | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """List deadlines for a profile with basic registry filters."""
+    clean_profile_id = _clean_optional_text(profile_id)
+    if clean_profile_id is None:
+        return []
+
+    where_clauses = ["profile_id = ?"]
+    values: list[Any] = [clean_profile_id]
+    if needs_review is not None:
+        where_clauses.append("COALESCE(needs_review, 0) = ?")
+        values.append(int(bool(needs_review)))
+    if not include_completed:
+        where_clauses.append("COALESCE(is_completed, 0) = 0")
+    if not include_cancelled:
+        where_clauses.append("COALESCE(is_cancelled, 0) = 0")
+
+    values.append(_clamp_limit(limit))
+    async with get_db() as db:
+        cursor = await db.execute(
+            f"""
+            SELECT {', '.join(DEADLINE_COLUMNS)}
+            FROM deadline_registry
+            WHERE {' AND '.join(where_clauses)}
+            ORDER BY
+                deadline_datetime IS NULL,
+                deadline_datetime ASC,
+                created_at DESC
+            LIMIT ?
+            """,
+            values,
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+
+    deadlines = [item for row in rows if (item := row_to_deadline(row)) is not None]
+    return _sort_deadlines_by_datetime(deadlines)
+
+
+async def list_upcoming_deadlines(
+    *,
+    profile_id: str,
+    days: int = 30,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return active deadlines due after today within the requested window."""
+    requested_days = max(1, int(days))
+    deadlines = await list_deadlines(
+        profile_id=profile_id,
+        include_completed=False,
+        include_cancelled=False,
+        limit=limit,
+    )
+    return [
+        deadline
+        for deadline in deadlines
+        if deadline["status"] == "upcoming"
+        and deadline["days_remaining"] is not None
+        and deadline["days_remaining"] <= requested_days
+    ]
+
+
+async def list_today_deadlines(*, profile_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Return active deadlines due today."""
+    deadlines = await list_deadlines(
+        profile_id=profile_id,
+        include_completed=False,
+        include_cancelled=False,
+        limit=limit,
+    )
+    return [deadline for deadline in deadlines if deadline["status"] == "due_today"]
+
+
+async def list_overdue_deadlines(
+    *,
+    profile_id: str,
+    include_completed: bool = False,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return overdue deadlines for a profile."""
+    deadlines = await list_deadlines(
+        profile_id=profile_id,
+        include_completed=include_completed,
+        include_cancelled=False,
+        limit=limit,
+    )
+    return [deadline for deadline in deadlines if deadline["status"] == "overdue"]
+
+
+async def list_needs_review_deadlines(
+    *,
+    profile_id: str,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return deadlines needing manual review, newest first."""
+    deadlines = await list_deadlines(
+        profile_id=profile_id,
+        include_completed=True,
+        include_cancelled=False,
+        needs_review=True,
+        limit=limit,
+    )
+    return sorted(deadlines, key=lambda item: str(item.get("created_at") or ""), reverse=True)

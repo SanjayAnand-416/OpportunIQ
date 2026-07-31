@@ -280,3 +280,37 @@ async def get_opportunity_by_id(
         row = await cursor.fetchone()
         await cursor.close()
     return row_to_opportunity(row)
+
+
+async def get_cached_discovery(
+    profile_id: str,
+    max_age_minutes: int = 30,
+) -> tuple[str, list[dict[str, Any]]] | None:
+    """Return the newest fresh discovery session for a profile, if available."""
+    safe_age = max(1, min(int(max_age_minutes), 24 * 60))
+    cutoff = (datetime.utcnow() - timedelta(minutes=safe_age)).strftime("%Y-%m-%d %H:%M:%S")
+
+    async with get_db() as db:
+        cursor = await db.execute(
+            """
+            SELECT session_id, MAX(fetched_at) AS latest_fetched_at
+            FROM opportunities
+            WHERE profile_id = ? AND COALESCE(is_expired, 0) = 0
+            GROUP BY session_id
+            HAVING latest_fetched_at >= ?
+            ORDER BY latest_fetched_at DESC
+            LIMIT 1
+            """,
+            (profile_id, cutoff),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+
+    if row is None:
+        return None
+
+    session_id = row["session_id"]
+    opportunities = await get_opportunities_by_session(session_id)
+    if not opportunities:
+        return None
+    return session_id, opportunities

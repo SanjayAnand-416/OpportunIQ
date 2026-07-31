@@ -220,6 +220,19 @@ def _connected_email(gmail_service: Any, profile_id: str) -> str | None:
     return getter(profile_id)
 
 
+def _credentials_exist(gmail_service: Any | None, profile_id: str) -> bool:
+    if gmail_service is None:
+        return False
+    checker = getattr(gmail_service, "credentials_exist", None)
+    if checker is None:
+        return False
+    try:
+        return bool(checker(profile_id))
+    except Exception as exc:
+        logger.warning("Gmail credential status check failed safely: %s", exc)
+        return False
+
+
 @router.get("/callback")
 async def gmail_oauth_callback(
     background_tasks: BackgroundTasks,
@@ -271,4 +284,25 @@ async def gmail_oauth_callback(
     return RedirectResponse(
         url=f"{FRONTEND_URL}/dashboard?gmail=connected&profile_id={profile_id}",
         status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+    )
+
+
+@router.get("/status", response_model=GmailStatusResponse)
+async def gmail_status(profile_id: str = Query(...)) -> GmailStatusResponse:
+    """Return safe Gmail connection status for a profile."""
+    profile = await _require_profile(profile_id)
+    public_profile_id = str(profile["profile_id"])
+
+    metadata = await get_gmail_connection(public_profile_id)
+    gmail_service = _load_gmail_service()
+    token_exists = _credentials_exist(gmail_service, public_profile_id)
+    metadata_connected = bool(metadata and metadata.get("connected"))
+    connected = metadata_connected and token_exists
+
+    return GmailStatusResponse(
+        connected=connected,
+        profile_id=public_profile_id,
+        email=metadata.get("email") if metadata else None,
+        last_scanned=metadata.get("last_scanned") if metadata else None,
+        deadlines_found=int(metadata.get("deadlines_found") or 0) if metadata else 0,
     )

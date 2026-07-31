@@ -6,6 +6,9 @@ from typing import Any
 
 import aiosqlite
 
+from app.database import get_db
+from app.models import StudentProfile
+
 
 PROFILE_COLUMNS = (
     "id",
@@ -55,3 +58,60 @@ def row_to_profile(row: aiosqlite.Row | Mapping[str, Any] | None) -> dict[str, A
     profile["skills"] = _deserialize_list(profile.get("skills"))
     profile["target_roles"] = _deserialize_list(profile.get("target_roles"))
     return profile
+
+
+def _profile_value(profile: StudentProfile, field_name: str, fallback: str | None = None) -> Any:
+    """Read a profile field while supporting legacy schema aliases."""
+    value = getattr(profile, field_name, None)
+    if value is None and fallback is not None:
+        return getattr(profile, fallback, None)
+    return value
+
+
+async def create_profile(profile: StudentProfile) -> dict[str, Any]:
+    """Persist a new student profile and return the public profile shape."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            """
+            INSERT INTO student_profiles (
+                name,
+                email,
+                year_of_study,
+                graduation_year,
+                degree,
+                college,
+                target_roles,
+                skills,
+                location,
+                opportunity_type
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                _profile_value(profile, "name", "full_name"),
+                profile.email,
+                profile.year_of_study,
+                profile.graduation_year,
+                _profile_value(profile, "degree"),
+                _profile_value(profile, "college"),
+                _serialize_list(profile.target_roles),
+                _serialize_list(profile.skills),
+                _profile_value(profile, "location", "preferred_location"),
+                profile.opportunity_type,
+            ),
+        )
+        await db.commit()
+        profile_id = str(cursor.lastrowid)
+        await cursor.close()
+
+        cursor = await db.execute(
+            f"SELECT {', '.join(PROFILE_COLUMNS)} FROM student_profiles WHERE id = ?",
+            (profile_id,),
+        )
+        row = await cursor.fetchone()
+        await cursor.close()
+
+    created_profile = row_to_profile(row)
+    if created_profile is None:
+        raise RuntimeError("Created profile could not be loaded")
+    return created_profile

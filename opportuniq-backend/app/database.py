@@ -45,7 +45,7 @@ async def init_db() -> None:
             """
         )
         for column_name, column_type in {
-            "profile_id": "TEXT UNIQUE",
+            "profile_id": "TEXT",
             "year_of_study": "TEXT",
             "graduation_year": "INTEGER",
             "degree": "TEXT",
@@ -95,7 +95,7 @@ async def init_db() -> None:
             """
         )
         for column_name, column_type in {
-            "opportunity_id": "TEXT UNIQUE",
+            "opportunity_id": "TEXT",
             "session_id": "TEXT",
             "profile_id": "TEXT",
             "company": "TEXT",

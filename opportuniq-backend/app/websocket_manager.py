@@ -1,8 +1,10 @@
 """WebSocket connection management for discovery trace events."""
 
 import logging
+import time
 from collections import deque
 from datetime import UTC, datetime
+from threading import RLock
 from typing import Any
 
 from fastapi import WebSocket
@@ -14,11 +16,40 @@ logger = logging.getLogger(__name__)
 class ConnectionManager:
     """Track trace WebSocket connections by discovery session."""
 
-    def __init__(self, max_events_per_session: int = 20, max_sessions: int = 200) -> None:
+    def __init__(
+        self,
+        max_events_per_session: int = 20,
+        max_sessions: int = 200,
+        session_ttl_seconds: float = 900,
+        max_connections_per_session: int = 5,
+    ) -> None:
         self.active_connections: dict[str, set[WebSocket]] = {}
         self.recent_events: dict[str, deque[dict[str, Any]]] = {}
+        self.last_activity: dict[str, float] = {}
         self.max_events_per_session = max_events_per_session
         self.max_sessions = max_sessions
+        self.session_ttl_seconds = session_ttl_seconds
+        self.max_connections_per_session = max_connections_per_session
+        self._lock = RLock()
+        self._clock = time.monotonic
+
+    def _cleanup_expired_locked(self) -> int:
+        now = self._clock()
+        expired = [
+            session_id
+            for session_id, last_seen in self.last_activity.items()
+            if session_id not in self.active_connections
+            and now - last_seen >= self.session_ttl_seconds
+        ]
+        for session_id in expired:
+            self.recent_events.pop(session_id, None)
+            self.last_activity.pop(session_id, None)
+        return len(expired)
+
+    def cleanup_expired_sessions(self) -> int:
+        """Discard inactive replay buffers that have exceeded their TTL."""
+        with self._lock:
+            return self._cleanup_expired_locked()
 
     async def connect(self, websocket: WebSocket, session_id: str) -> None:
         """Accept a WebSocket and replay recent events for its session."""
@@ -27,8 +58,21 @@ class ConnectionManager:
             await websocket.close(code=1008)
             return
         await websocket.accept()
-        self.active_connections.setdefault(clean_session_id, set()).add(websocket)
-        for event in self.recent_events.get(clean_session_id, ()):
+        with self._lock:
+            self._cleanup_expired_locked()
+            connections = self.active_connections.setdefault(clean_session_id, set())
+            if len(connections) >= self.max_connections_per_session:
+                rejected = True
+                replay_events: tuple[dict[str, Any], ...] = ()
+            else:
+                rejected = False
+                connections.add(websocket)
+                self.last_activity[clean_session_id] = self._clock()
+                replay_events = tuple(self.recent_events.get(clean_session_id, ()))
+        if rejected:
+            await websocket.close(code=1013)
+            return
+        for event in replay_events:
             try:
                 await websocket.send_json(event)
             except Exception as exc:
@@ -43,25 +87,36 @@ class ConnectionManager:
     ) -> None:
         """Remove one socket or all sockets for a session."""
         clean_session_id = session_id.strip()
-        connections = self.active_connections.get(clean_session_id)
-        if not connections:
-            return
-        if websocket is None:
-            self.active_connections.pop(clean_session_id, None)
-            return
-        connections.discard(websocket)
-        if not connections:
-            self.active_connections.pop(clean_session_id, None)
+        with self._lock:
+            connections = self.active_connections.get(clean_session_id)
+            if not connections:
+                return
+            if websocket is None:
+                self.active_connections.pop(clean_session_id, None)
+            else:
+                connections.discard(websocket)
+                if not connections:
+                    self.active_connections.pop(clean_session_id, None)
+            self.last_activity[clean_session_id] = self._clock()
 
     def _buffer_event(self, session_id: str, event: dict[str, Any]) -> None:
-        if session_id not in self.recent_events and len(self.recent_events) >= self.max_sessions:
-            oldest_session_id = next(iter(self.recent_events))
-            self.recent_events.pop(oldest_session_id, None)
-        events = self.recent_events.setdefault(
-            session_id,
-            deque(maxlen=self.max_events_per_session),
-        )
-        events.append(event)
+        with self._lock:
+            self._cleanup_expired_locked()
+            if session_id not in self.recent_events and len(self.recent_events) >= self.max_sessions:
+                evictable = (
+                    candidate
+                    for candidate in self.recent_events
+                    if candidate not in self.active_connections
+                )
+                oldest_session_id = next(evictable, next(iter(self.recent_events)))
+                self.recent_events.pop(oldest_session_id, None)
+                self.last_activity.pop(oldest_session_id, None)
+            events = self.recent_events.setdefault(
+                session_id,
+                deque(maxlen=self.max_events_per_session),
+            )
+            events.append(event)
+            self.last_activity[session_id] = self._clock()
 
     async def send_event(
         self,
@@ -74,7 +129,8 @@ class ConnectionManager:
             return False
         self._buffer_event(clean_session_id, event)
 
-        connections = set(self.active_connections.get(clean_session_id, set()))
+        with self._lock:
+            connections = set(self.active_connections.get(clean_session_id, set()))
         if not connections:
             return False
 
@@ -91,7 +147,9 @@ class ConnectionManager:
     async def broadcast_event(self, event: dict[str, Any]) -> int:
         """Broadcast an event to all active trace sockets."""
         sent_count = 0
-        for session_id in list(self.active_connections):
+        with self._lock:
+            session_ids = list(self.active_connections)
+        for session_id in session_ids:
             if await self.send_event(session_id, event):
                 sent_count += 1
         return sent_count

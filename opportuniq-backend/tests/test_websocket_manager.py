@@ -42,6 +42,25 @@ def test_multiple_sockets_can_join_one_session():
     assert manager.active_connections["session-1"] == {first, second}
 
 
+def test_concurrent_connects_and_disconnect_are_consistent():
+    manager = ConnectionManager()
+    sockets = [FakeWebSocket() for _ in range(4)]
+
+    async def scenario():
+        await asyncio.gather(
+            *(manager.connect(socket, "session-1") for socket in sockets)
+        )
+        await asyncio.gather(
+            *(manager.send_event("session-1", {"sequence": index}) for index in range(4))
+        )
+
+    asyncio.run(scenario())
+    manager.disconnect("session-1", sockets[0])
+
+    assert manager.active_connections["session-1"] == set(sockets[1:])
+    assert all(len(socket.sent) == 4 for socket in sockets)
+
+
 def test_disconnect_removes_only_intended_socket():
     manager = ConnectionManager()
     first = FakeWebSocket()
@@ -106,3 +125,43 @@ def test_buffered_events_replay_on_connect():
     asyncio.run(manager.connect(socket, "session-1"))
 
     assert socket.sent == [{"message": "already happened"}]
+
+
+def test_event_and_session_buffers_are_bounded():
+    manager = ConnectionManager(max_events_per_session=2, max_sessions=2)
+    asyncio.run(manager.send_event("one", {"sequence": 1}))
+    asyncio.run(manager.send_event("one", {"sequence": 2}))
+    asyncio.run(manager.send_event("one", {"sequence": 3}))
+    asyncio.run(manager.send_event("two", {"sequence": 1}))
+    asyncio.run(manager.send_event("three", {"sequence": 1}))
+
+    if "one" in manager.recent_events:
+        assert list(manager.recent_events["one"]) == [
+            {"sequence": 2},
+            {"sequence": 3},
+        ]
+    assert len(manager.recent_events) == 2
+
+
+def test_inactive_buffer_expires_after_ttl():
+    manager = ConnectionManager(session_ttl_seconds=10)
+    now = [0.0]
+    manager._clock = lambda: now[0]
+    asyncio.run(manager.send_event("session-1", {"message": "old"}))
+
+    now[0] = 11.0
+
+    assert manager.cleanup_expired_sessions() == 1
+    assert "session-1" not in manager.recent_events
+
+
+def test_connection_limit_rejects_extra_socket():
+    manager = ConnectionManager(max_connections_per_session=1)
+    first = FakeWebSocket()
+    second = FakeWebSocket()
+    asyncio.run(manager.connect(first, "session-1"))
+
+    asyncio.run(manager.connect(second, "session-1"))
+
+    assert manager.active_connections["session-1"] == {first}
+    assert second.closed_code == 1013

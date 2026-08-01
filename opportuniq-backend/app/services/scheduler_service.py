@@ -32,7 +32,11 @@ REMINDER_OFFSETS = {
 }
 ALL_REMINDER_OFFSETS = (*REMINDER_OFFSETS, "0d")
 
-scheduler = AsyncIOScheduler(timezone=timezone.utc)
+def _new_scheduler() -> AsyncIOScheduler:
+    return AsyncIOScheduler(timezone=timezone.utc)
+
+
+scheduler = _new_scheduler()
 
 
 def parse_deadline_datetime(value: Any) -> datetime | None:
@@ -107,13 +111,15 @@ def start_scheduler() -> bool:
 
 def shutdown_scheduler(wait: bool = False) -> bool:
     """Stop the scheduler safely and idempotently."""
+    global scheduler
     if not scheduler_is_running():
         return False
+    active_scheduler = scheduler
+    scheduler = _new_scheduler()
     try:
-        scheduler.shutdown(wait=wait)
+        active_scheduler.shutdown(wait=wait)
     except RuntimeError:
-        logger.warning("APScheduler was already stopped")
-        return False
+        logger.warning("APScheduler event loop was already closed")
     logger.info("Stopped APScheduler")
     return True
 
@@ -431,6 +437,8 @@ async def restore_scheduled_reminders() -> dict[str, int]:
     for deadline in deadlines:
         summary["deadlines_processed"] += 1
         try:
+            if parse_deadline_datetime(deadline.get("deadline_datetime")) is None:
+                raise ValueError("Malformed deadline datetime")
             result = schedule_reminders(
                 deadline["deadline_id"],
                 deadline["deadline_datetime"],

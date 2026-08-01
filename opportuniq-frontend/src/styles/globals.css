@@ -2843,3 +2843,280 @@ a {
     padding: 16px;
   }
 }
+
+/* Gmail connect card */
+
+.gmail-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 22px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.05);
+  text-align: center;
+}
+
+.gmail-card-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 0;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.gmail-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+}
+
+.gmail-card-icon-neutral {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.gmail-card-icon-success {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.gmail-card-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.gmail-card-description {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.gmail-trust-list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+  text-align: left;
+}
+
+.gmail-trust-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gmail-trust-list svg {
+  flex-shrink: 0;
+  color: #16a34a;
+}
+
+.gmail-connect-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 10px;
+  background: #4f46e5;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.gmail-connect-btn:hover {
+  background: #4338ca;
+}
+
+.gmail-connect-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.gmail-connect-btn:disabled {
+  background: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.gmail-manual-link {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.gmail-manual-link:hover {
+  color: #4f46e5;
+}
+
+.gmail-manual-link:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.gmail-status-list {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 10px;
+  margin: 4px 0 0;
+  text-align: left;
+}
+
+.gmail-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gmail-status-row dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.gmail-status-row dd {
+  overflow: hidden;
+  margin: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gmail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-self: stretch;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.gmail-action-btn {
+  display: flex;
+  flex: 1 1 130px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+.gmail-action-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.gmail-action-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.gmail-action-secondary {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.gmail-action-secondary:hover:not(:disabled) {
+  background: #e2e8f0;
+}
+
+.gmail-action-outline {
+  border-color: #fecaca;
+  background: #ffffff;
+  color: #b91c1c;
+}
+
+.gmail-action-outline:hover:not(:disabled) {
+  background: #fef2f2;
+}
+
+.gmail-error {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: 8px;
+  text-align: left;
+}
+
+.gmail-error .error-banner {
+  margin-top: 0;
+}
+
+.gmail-retry-btn {
+  display: flex;
+  align-self: flex-start;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #334155;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.gmail-retry-btn:hover {
+  background: #f8fafc;
+}
+
+.gmail-retry-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .gmail-card {
+    padding: 18px;
+  }
+
+  .gmail-actions {
+    flex-direction: column;
+  }
+
+  .gmail-action-btn {
+    flex: 1 1 auto;
+  }
+}

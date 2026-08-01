@@ -4065,3 +4065,149 @@ a {
     grid-template-columns: 1fr;
   }
 }
+
+/* Deadline form: fieldset + validation */
+
+.deadline-form-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+
+.deadline-form-fieldset:disabled {
+  opacity: 0.7;
+}
+
+.deadline-form-field input[aria-invalid='true'],
+.deadline-form-field select[aria-invalid='true'] {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.deadline-form-error {
+  margin: 0;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+/* Deadline detail popup: remaining time + actions */
+
+.deadline-popup-remaining {
+  font-weight: 800;
+}
+
+.deadline-popup-remaining-expired {
+  color: #b91c1c;
+}
+
+.deadline-popup-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.deadline-popup-actions .drawer-action-btn {
+  flex: 1 1 100px;
+}
+
+.deadline-popup-delete-btn {
+  display: flex;
+  flex: 1 1 100px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 14px;
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  background: #ffffff;
+  color: #b91c1c;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.deadline-popup-delete-btn:hover {
+  background: #fef2f2;
+}
+
+.deadline-popup-delete-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+/* Confirm dialog (rendered inline within a modal, no backdrop of its own) */
+
+.confirm-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.confirm-dialog-message {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.confirm-dialog-actions .drawer-action-btn {
+  flex: 1;
+}
+
+.confirm-dialog-confirm-btn {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 14px;
+  border: none;
+  border-radius: 10px;
+  background: #dc2626;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease;
+}
+
+.confirm-dialog-confirm-btn:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.confirm-dialog-confirm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.confirm-dialog-confirm-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .deadline-popup-actions {
+    flex-direction: column;
+  }
+
+  .confirm-dialog-actions {
+    flex-direction: column-reverse;
+  }
+}

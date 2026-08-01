@@ -8,6 +8,30 @@ export async function getDeadlines(profileId) {
   return response.data
 }
 
+export async function getDeadline(deadlineId) {
+  const response = await apiClient.get(`/api/deadlines/${deadlineId}`)
+
+  return response.data
+}
+
+export async function createDeadline(payload) {
+  const response = await apiClient.post('/api/deadlines', payload)
+
+  return response.data
+}
+
+export async function updateDeadline(deadlineId, payload) {
+  const response = await apiClient.put(`/api/deadlines/${deadlineId}`, payload)
+
+  return response.data
+}
+
+export async function deleteDeadline(deadlineId) {
+  const response = await apiClient.delete(`/api/deadlines/${deadlineId}`)
+
+  return response.data
+}
+
 export function getDeadlinesErrorMessage(error) {
   if (!error.response) {
     return 'Network failure. Please check your connection and try again.'
@@ -17,7 +41,11 @@ export function getDeadlinesErrorMessage(error) {
   const detail = error.response.data?.detail || error.response.data?.message
 
   if (status === 404) {
-    return 'Profile not found. Please refresh and try again.'
+    return 'The requested deadline could not be found. Please refresh and try again.'
+  }
+
+  if (status === 400 || status === 422) {
+    return detail || 'Please check the form for invalid or missing fields.'
   }
 
   if (status >= 500) {

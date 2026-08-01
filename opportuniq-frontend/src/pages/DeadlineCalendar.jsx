@@ -12,7 +12,9 @@ import { getDeadlines, getDeadlinesErrorMessage } from '../api/deadlines'
 import DeadlineDetailPopup from '../components/calendar/DeadlineDetailPopup'
 import DeadlineForm from '../components/calendar/DeadlineForm'
 import ErrorBanner from '../components/common/ErrorBanner'
+import Toast from '../components/common/Toast'
 import { useAppContext } from '../contexts/AppContext'
+import { useToast } from '../hooks/useToast'
 import { mapDeadlineToEvent } from '../utils/deadlines'
 
 const MONTH_VIEW = 'dayGridMonth'
@@ -39,6 +41,7 @@ function CalendarSkeleton() {
 export default function DeadlineCalendar() {
   const { profileId } = useAppContext()
   const calendarRef = useRef(null)
+  const [toastMessage, setToastMessage] = useToast()
 
   const [deadlines, setDeadlines] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -47,6 +50,8 @@ export default function DeadlineCalendar() {
 
   const [selectedDeadline, setSelectedDeadline] = useState(null)
   const [isPopupOpen, setIsPopupOpen] = useState(false)
+
+  const [editingDeadline, setEditingDeadline] = useState(null)
   const [isFormOpen, setIsFormOpen] = useState(false)
 
   const fetchDeadlines = useCallback(async () => {
@@ -77,6 +82,33 @@ export default function DeadlineCalendar() {
   function handleEventClick(clickInfo) {
     setSelectedDeadline(clickInfo.event.extendedProps)
     setIsPopupOpen(true)
+  }
+
+  function handleOpenCreateForm() {
+    setEditingDeadline(null)
+    setIsFormOpen(true)
+  }
+
+  function handleEditFromPopup(deadlineToEdit) {
+    setIsPopupOpen(false)
+    setEditingDeadline(deadlineToEdit)
+    setIsFormOpen(true)
+  }
+
+  function handleFormSuccess(mode) {
+    setIsFormOpen(false)
+    setEditingDeadline(null)
+    fetchDeadlines()
+    setToastMessage(
+      mode === 'edit' ? 'Deadline Updated Successfully' : 'Deadline Added Successfully',
+    )
+  }
+
+  function handleDeleted() {
+    setIsPopupOpen(false)
+    setSelectedDeadline(null)
+    fetchDeadlines()
+    setToastMessage('Deadline Deleted Successfully')
   }
 
   let content
@@ -110,7 +142,7 @@ export default function DeadlineCalendar() {
         <button
           type="button"
           className="dash-empty-btn"
-          onClick={() => setIsFormOpen(true)}
+          onClick={handleOpenCreateForm}
           aria-label="Add first deadline"
         >
           <Plus size={16} aria-hidden="true" />
@@ -190,7 +222,7 @@ export default function DeadlineCalendar() {
           <button
             type="button"
             className="dash-toolbar-btn dash-toolbar-btn-primary"
-            onClick={() => setIsFormOpen(true)}
+            onClick={handleOpenCreateForm}
             aria-label="Add a new deadline"
           >
             <Plus size={16} aria-hidden="true" />
@@ -205,9 +237,19 @@ export default function DeadlineCalendar() {
         deadline={selectedDeadline}
         isOpen={isPopupOpen}
         onClose={() => setIsPopupOpen(false)}
+        onEdit={handleEditFromPopup}
+        onDeleted={handleDeleted}
       />
 
-      <DeadlineForm isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} />
+      <DeadlineForm
+        isOpen={isFormOpen}
+        deadline={editingDeadline}
+        profileId={profileId}
+        onClose={() => setIsFormOpen(false)}
+        onSuccess={handleFormSuccess}
+      />
+
+      <Toast message={toastMessage} />
     </div>
   )
 }

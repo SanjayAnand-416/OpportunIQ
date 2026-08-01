@@ -119,6 +119,40 @@ def _resume_service_functions():
     return forward_to_resumeai, map_resumeai_to_profile
 
 
+def _resume_error_response(exc: Exception) -> JSONResponse | None:
+    """Translate active adapter exceptions without exposing provider details."""
+    responses = {
+        "ResumeAIConfigurationError": (
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Resume extraction service is not available.",
+        ),
+        "ResumeAIConnectionError": (
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Resume extraction service is not available.",
+        ),
+        "ResumeAITimeoutError": (
+            status.HTTP_504_GATEWAY_TIMEOUT,
+            "Resume extraction service timed out.",
+        ),
+        "ResumeAIExtractionError": (
+            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            "Resume extraction failed.",
+        ),
+        "ResumeAIResponseError": (
+            status.HTTP_502_BAD_GATEWAY,
+            "Resume extraction returned an invalid response.",
+        ),
+    }
+    response = responses.get(type(exc).__name__)
+    if response is None:
+        return None
+    status_code, detail = response
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": detail, "fallback": "manual"},
+    )
+
+
 def _normalize_update_payload(updates: dict[str, Any]) -> dict[str, Any]:
     """Normalize patch payload values before persistence."""
     normalized: dict[str, Any] = {}
@@ -278,19 +312,52 @@ async def upload_resume_profile(
             },
         )
 
-    response = await forward_to_resumeai(file_bytes, filename, content_type)
-    if not response.success or response.data is None:
+    try:
+        response = await forward_to_resumeai(file_bytes, filename, content_type)
+    except Exception as exc:
+        controlled_response = _resume_error_response(exc)
+        if controlled_response is not None:
+            logger.warning("Resume extraction integration failed: %s", type(exc).__name__)
+            return controlled_response
+        logger.exception("Unexpected resume extraction failure")
         return JSONResponse(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content={
-                "detail": "ResumeAI extraction failed.",
+                "detail": "Resume extraction could not be completed.",
                 "fallback": "manual",
             },
         )
 
-    resume_data = response.data.model_dump()
+    if not response.success or response.data is None:
+        return JSONResponse(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            content={
+                "detail": "Resume extraction failed.",
+                "fallback": "manual",
+            },
+        )
+
+    resume_data = (
+        response.data.model_dump()
+        if hasattr(response.data, "model_dump")
+        else response.data
+    )
     profile_id = str(uuid.uuid4())
-    mapped = map_resumeai_to_profile(resume_data, profile_id=profile_id)
+    try:
+        mapped = map_resumeai_to_profile(resume_data, profile_id=profile_id)
+    except Exception as exc:
+        controlled_response = _resume_error_response(exc)
+        if controlled_response is not None:
+            logger.warning("Resume extraction mapping failed: %s", type(exc).__name__)
+            return controlled_response
+        logger.exception("Unexpected resume extraction mapping failure")
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "detail": "Resume extraction could not be completed.",
+                "fallback": "manual",
+            },
+        )
     profile_payload = mapped.get("profile", {})
     profile = _build_student_profile(
         str(profile_payload.get("profile_id") or profile_id),

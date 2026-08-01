@@ -11,6 +11,11 @@ from app.routers.deadlines import router as deadlines_router
 from app.routers.gmail import router as gmail_router
 from app.routers.opportunities import router as opportunities_router
 from app.routers.profile import router as profile_router
+from app.services.scheduler_service import (
+    restore_scheduled_reminders,
+    shutdown_scheduler,
+    start_scheduler,
+)
 from app.websocket_manager import connection_manager
 
 
@@ -23,7 +28,15 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Initializing OpportunIQ database")
     await init_db()
-    yield
+    start_scheduler()
+    try:
+        await restore_scheduled_reminders()
+    except Exception:
+        logger.exception("Reminder restoration failed; startup will continue")
+    try:
+        yield
+    finally:
+        shutdown_scheduler(wait=False)
 
 
 app = FastAPI(

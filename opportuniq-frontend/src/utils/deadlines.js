@@ -67,3 +67,32 @@ export function isWithinUpcomingWindow(deadlineDatetime) {
   const daysLeft = calculateDaysLeft(deadlineDatetime)
   return daysLeft !== null && daysLeft >= 0 && daysLeft <= UPCOMING_WINDOW_DAYS
 }
+
+// Alias matching the calendar spec's requested helper name — same calculation,
+// no need for a second implementation.
+export const calculateDaysRemaining = calculateDaysLeft
+
+const URGENCY_HEX = {
+  red: { background: '#dc2626', border: '#b91c1c' },
+  amber: { background: '#d97706', border: '#b45309' },
+  green: { background: '#16a34a', border: '#15803d' },
+  gray: { background: '#94a3b8', border: '#64748b' },
+}
+
+export function getDeadlineColor(daysLeft) {
+  return URGENCY_HEX[getUrgencyColor(daysLeft)]
+}
+
+export function mapDeadlineToEvent(deadline) {
+  const daysLeft = calculateDaysLeft(deadline.deadline_datetime)
+  const { background, border } = getDeadlineColor(daysLeft)
+
+  return {
+    id: String(deadline.id),
+    title: deadline.title,
+    start: deadline.deadline_datetime,
+    backgroundColor: background,
+    borderColor: border,
+    extendedProps: { ...deadline, daysLeft },
+  }
+}

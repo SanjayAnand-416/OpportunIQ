@@ -10,6 +10,8 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.jobstores.base import JobLookupError
+from apscheduler.triggers.date import DateTrigger
 
 from app.config import APP_TIMEZONE
 from app.models import ReminderExecutionResult
@@ -356,3 +358,63 @@ async def execute_reminder(
             reason=type(exc).__name__,
             **result_base,
         ).model_dump()
+
+
+def schedule_reminders(
+    deadline_id: str,
+    deadline_datetime: datetime | str,
+    profile_id: str,
+) -> dict[str, Any]:
+    """Schedule every future reminder offset for one active deadline."""
+    if not scheduler_is_running():
+        start_scheduler()
+    fire_times = calculate_reminder_times(deadline_datetime)
+    scheduled_jobs: list[str] = []
+    for offset, fire_time in fire_times.items():
+        job_id = build_job_id(deadline_id, offset)
+        scheduler.add_job(
+            execute_reminder,
+            trigger=DateTrigger(run_date=fire_time, timezone=timezone.utc),
+            args=[deadline_id, profile_id, offset],
+            id=job_id,
+            replace_existing=True,
+            misfire_grace_time=300,
+            coalesce=True,
+        )
+        scheduled_jobs.append(job_id)
+    return {
+        "deadline_id": deadline_id,
+        "scheduled_jobs": scheduled_jobs,
+        "skipped_offsets": [
+            offset for offset in ALL_REMINDER_OFFSETS if offset not in fire_times
+        ],
+    }
+
+
+def cancel_reminders(deadline_id: str) -> list[str]:
+    """Remove all known reminder jobs for one deadline."""
+    removed: list[str] = []
+    for offset in ALL_REMINDER_OFFSETS:
+        job_id = build_job_id(deadline_id, offset)
+        try:
+            scheduler.remove_job(job_id)
+            removed.append(job_id)
+        except JobLookupError:
+            continue
+    return removed
+
+
+def reschedule_reminders(
+    deadline_id: str,
+    deadline_datetime: datetime | str,
+    profile_id: str,
+) -> dict[str, Any]:
+    """Replace all reminder jobs for an updated deadline."""
+    cancel_reminders(deadline_id)
+    return schedule_reminders(deadline_id, deadline_datetime, profile_id)
+
+
+def get_deadline_jobs(deadline_id: str) -> list[dict[str, str | None]]:
+    """Return serializable jobs belonging to one deadline."""
+    prefix = f"reminder:{deadline_id}:"
+    return [job for job in list_scheduled_jobs() if job["id"].startswith(prefix)]

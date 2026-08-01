@@ -85,6 +85,13 @@ async def get_opportunity_gap_analysis(profile_id: str, opportunity_id: str):
     if result is None: raise HTTPException(404, "No gap analysis exists for this opportunity.")
     return GapAnalysisResult(**result)
 
+@router.get("/analysis/{analysis_id}", response_model=GapAnalysisResult)
+async def get_gap_analysis_by_id(analysis_id: str):
+    result = await gap_analysis_repository.get_analysis_by_id(analysis_id.strip())
+    if result is None:
+        raise HTTPException(404, "Gap analysis not found.")
+    return GapAnalysisResult(**result)
+
 @router.get("/{profile_id}", response_model=GapAnalysisResult)
 async def get_latest_gap_analysis(profile_id: str):
     await _require_profile(profile_id)

@@ -17,6 +17,7 @@ from app.models import (
     DeadlineUpdateResponse,
 )
 from app.repositories import deadline_repository, profile_repository
+from app.services import deadline_service
 
 
 logger = logging.getLogger(__name__)
@@ -100,17 +101,13 @@ async def create_deadline(payload: DeadlineCreate) -> DeadlineCreateResponse:
     """Create a manual deadline for a profile."""
     profile_id = await _require_profile(payload.profile_id)
     try:
-        created_deadline = await deadline_repository.create_deadline(
-            profile_id=profile_id,
-            opportunity_id=payload.opportunity_id,
-            title=payload.title,
-            organization=payload.organization,
-            deadline_datetime=payload.deadline_datetime,
-            event_type=_normalize_event_type(payload.event_type) or "other",
-            action_required=payload.action_required,
-            notes=payload.notes,
-            source="manual",
+        normalized_payload = payload.model_copy(
+            update={
+                "profile_id": profile_id,
+                "event_type": _normalize_event_type(payload.event_type) or "other",
+            }
         )
+        result = await deadline_service.create_manual_deadline(normalized_payload)
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -125,8 +122,8 @@ async def create_deadline(payload: DeadlineCreate) -> DeadlineCreateResponse:
 
     return DeadlineCreateResponse(
         success=True,
-        deadline=_deadline_response(created_deadline),
-        reminders_scheduled=[],
+        deadline=_deadline_response(result["deadline"]),
+        reminders_scheduled=result["schedule"]["scheduled_jobs"],
     )
 
 

@@ -3,7 +3,7 @@
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, HttpUrl, field_validator
+from pydantic import BaseModel, Field, HttpUrl, field_validator, model_validator
 
 
 OPPORTUNITY_TYPES = {
@@ -593,6 +593,80 @@ class NotificationSettingsUpdate(NotificationSettingsResponse):
     @classmethod
     def validate_profile_id(cls, value: str) -> str:
         return _non_blank(value)
+
+
+class SkillEvidence(BaseModel):
+    skill: str
+    evidence_level: int = Field(ge=0, le=2)
+    evidence_summary: str
+    jd_frequency: float = Field(ge=0, le=1)
+    priority: Literal["high", "medium", "low"]
+    learning_path_order: int = Field(ge=0)
+    cluster_name: str | None = None
+
+
+class LearningResource(BaseModel):
+    resource: str
+    url: str
+
+
+class MissingSkill(BaseModel):
+    skill: str
+    priority: Literal["high", "medium", "low"]
+    reason: str
+    evidence_level: int = Field(ge=0, le=2)
+    learning_path_order: int = Field(ge=0)
+    cluster_name: str | None = None
+    learning_resources: list[LearningResource] = Field(default_factory=list)
+
+
+class SuggestedProject(BaseModel):
+    project_type: str
+    description: str
+    skills_addressed: list[str] = Field(default_factory=list)
+
+
+class GapAnalysisRunRequest(BaseModel):
+    profile_id: str
+    target_role: str | None = None
+    job_description: str | None = Field(default=None, min_length=50)
+    opportunity_id: str | None = None
+    session_id: str | None = None
+
+    @field_validator("profile_id")
+    @classmethod
+    def validate_profile(cls, value: str) -> str: return _non_blank(value)
+
+    @field_validator("target_role", "opportunity_id", "session_id")
+    @classmethod
+    def validate_optional(cls, value: str | None) -> str | None:
+        return _non_blank(value) if value is not None else None
+
+    @field_validator("job_description")
+    @classmethod
+    def clean_jd(cls, value: str | None) -> str | None: return value.strip() if value else None
+
+    @model_validator(mode="after")
+    def require_mode_input(self):
+        if not any((self.target_role, self.job_description, self.opportunity_id)):
+            raise ValueError("Provide target_role, job_description, or opportunity_id.")
+        return self
+
+
+class GapAnalysisResult(BaseModel):
+    id: str
+    profile_id: str
+    opportunity_id: str | None = None
+    target_role: str
+    analysis_mode: Literal["profile_vs_role", "profile_vs_jd", "profile_vs_opportunity"]
+    overall_assessment: str
+    missing_skills: list[MissingSkill] = Field(default_factory=list)
+    suggested_projects: list[SuggestedProject] = Field(default_factory=list)
+    evidence_data: list[SkillEvidence] = Field(default_factory=list)
+    jd_snippet: str | None = Field(default=None, max_length=300)
+    profile_snapshot: dict = Field(default_factory=dict)
+    generated_at: datetime | str
+    is_stale: bool = False
 
 
 class GmailScanRequest(BaseModel):

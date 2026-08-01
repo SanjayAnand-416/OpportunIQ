@@ -165,6 +165,9 @@ def test_profile_to_reminder_and_gap_journey(tmp_path, monkeypatch):
             json={"profile_id": profile_id, "target_role": "Backend Intern"},
         )
         assert role_gap.status_code == 200
+        assert client.get(
+            f"/api/gap-analysis/analysis/{role_gap.json()['id']}"
+        ).status_code == 200
         assert client.get(f"/api/gap-analysis/{profile_id}").status_code == 200
         jd_gap = client.post(
             "/api/gap-analysis/run",

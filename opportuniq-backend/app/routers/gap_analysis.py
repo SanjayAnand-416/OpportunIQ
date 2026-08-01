@@ -68,9 +68,7 @@ async def run_gap_analysis(payload: GapAnalysisRunRequest):
         result = await _run_gap_analysis_agent(profile_id=payload.profile_id, target_role=payload.target_role, job_description=payload.job_description, opportunity_id=payload.opportunity_id, session_id=session_id)
         if result.profile_id != payload.profile_id or result.analysis_mode != mode:
             raise HTTPException(502, "Gap analysis returned inconsistent identifiers.")
-        result = _guard_result(result, payload.job_description)
-        saved = await gap_analysis_repository.save_gap_analysis(result, persist=mode != "profile_vs_jd")
-        response = GapAnalysisResult(**saved)
+        response = _guard_result(result, payload.job_description)
         await emit_trace(session_id, "gap-analysis", "complete", "Gap analysis complete", {"analysis_id": response.id, "analysis_mode": mode, "missing_skill_count": len(response.missing_skills)})
         return response
     except Exception as exc:

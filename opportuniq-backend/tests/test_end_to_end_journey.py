@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app import config, database
 from app.main import app
+from app.repositories import gap_analysis_repository
 from app.routers import gap_analysis, opportunities as opportunities_router
 from app.services import scheduler_service
 
@@ -66,7 +67,7 @@ def test_profile_to_reminder_and_gap_journey(tmp_path, monkeypatch):
             if kwargs.get("job_description")
             else "profile_vs_role"
         )
-        return {
+        result = {
             "id": f"analysis-{mode}",
             "profile_id": kwargs["profile_id"],
             "opportunity_id": kwargs.get("opportunity_id"),
@@ -79,6 +80,10 @@ def test_profile_to_reminder_and_gap_journey(tmp_path, monkeypatch):
             "profile_snapshot": {"skills": PROFILE["skills"]},
             "generated_at": datetime.now(UTC).isoformat(),
         }
+        return await gap_analysis_repository.save_gap_analysis(
+            result,
+            persist=mode != "profile_vs_jd",
+        )
 
     monkeypatch.setattr(
         gap_analysis, "_load_gap_analysis_agent", lambda: fake_gap_runner

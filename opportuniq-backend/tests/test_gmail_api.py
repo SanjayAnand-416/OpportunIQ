@@ -78,8 +78,11 @@ def client(tmp_path, monkeypatch):
     oauth_state_manager._states.clear()
 
 
-def create_profile(client):
-    response = client.post("/api/profile/manual", json=VALID_PROFILE)
+def create_profile(client, **overrides):
+    response = client.post(
+        "/api/profile/manual",
+        json={**VALID_PROFILE, **overrides},
+    )
     assert response.status_code == 201
     return response.json()["profile_id"]
 
@@ -222,3 +225,42 @@ def test_disconnect_missing_connected_and_already_disconnected(client, monkeypat
     assert connected.json() == {"success": True, "profile_id": profile_id}
     assert again.status_code == 200
     assert service.deleted == [profile_id, profile_id]
+
+
+def test_two_profile_oauth_sessions_and_disconnect_are_isolated(client, monkeypatch):
+    first_profile = create_profile(client)
+    second_profile = create_profile(
+        client,
+        name="Second Gmail Demo",
+        email="second-gmail@example.com",
+    )
+    service = FakeGmailService()
+    guardian = FakeGuardianAgent()
+    monkeypatch.setattr(gmail_router, "_load_gmail_service", lambda: service)
+    monkeypatch.setattr(gmail_router, "_load_guardian_agent", lambda: guardian)
+
+    first_state = oauth_state_manager.create_state(first_profile)
+    second_state = oauth_state_manager.create_state(second_profile)
+    first_callback = client.get(
+        f"/api/gmail/callback?code=first&state={first_state}",
+        follow_redirects=False,
+    )
+    second_callback = client.get(
+        f"/api/gmail/callback?code=second&state={second_state}",
+        follow_redirects=False,
+    )
+
+    assert first_callback.status_code == 307
+    assert second_callback.status_code == 307
+    assert service.saved[0][1] == first_profile
+    assert service.saved[1][1] == second_profile
+    assert service.token_profiles == {first_profile, second_profile}
+
+    disconnected = client.delete(f"/api/gmail/disconnect?profile_id={first_profile}")
+
+    assert disconnected.status_code == 200
+    assert service.credentials_exist(first_profile) is False
+    assert service.credentials_exist(second_profile) is True
+    assert client.get(f"/api/gmail/status?profile_id={second_profile}").json()[
+        "connected"
+    ] is True

@@ -41,9 +41,12 @@ Once a student applies, critical follow-up deadlines — hackathon submissions, 
 - Searches across 8+ platforms for matching opportunities using a hybrid JobSpy + Tavily discovery layer
 - Ranks results by skill match (sentence-transformer cosine similarity) and deadline urgency
 - Deduplicates cross-platform listings using a 3-layer pipeline
+- **Runs a Gap Analysis Agent that compares the student's resume skills against a target job role or opportunity and produces a prioritised skill gap report with project suggestions and learning resources**
 - Connects to Gmail (OAuth read-only) to extract application deadlines from emails using an LLM
 - Schedules proactive reminders at 7 days, 3 days, 1 day, and same-day intervals
 - Delivers contextual, personalised reminder messages via in-app notifications and email
+
+> **v2.1 Addition — Gap Analysis Agent:** Added following Review 1 feedback. The Gap Analysis module is adapted from the ResumeAI project's `gap-advisor.service.ts` logic, re-implemented natively in Python to match OpportunIQ's FastAPI + SQLite stack. The TypeScript source cannot be copy-pasted directly (different runtime, database engine, and dependency chain), but the core methodology — deterministic evidence scoring + LLM narrative synthesis — is preserved exactly. See Section 6 (Agent Pipeline) and Section 9 (Build Plan Step 3.5) for implementation details.
 
 **Thrust Area:** AI for Education
 **Team Size:** 3 members
@@ -72,9 +75,10 @@ Once a student applies, critical follow-up deadlines — hackathon submissions, 
 │             │ │            │      │  ┌─────────────────────────┐  │
 │ ① Profile   │ │ profiles   │      │  │  ResumeAI Microservice  │  │
 │ ② Discovery │ │ opportun.  │      │  │  (TypeScript / Node.js) │  │
-│ ③ Ranker    │ │ deadlines  │      │  │  POST /api/v1/profile/  │  │
-│ ④ Guardian  │ │ saved_ops  │      │  │       extract           │  │
-│ ⑤ Notifier  │ │ notifs     │      │  │  • PDF/DOC/DOCX parsing │  │
+│ ③ Gap Agent │ │ deadlines  │      │  │  POST /api/v1/profile/  │  │
+│ ④ Ranker    │ │ saved_ops  │      │  │       extract           │  │
+│ ⑤ Guardian  │ │ notifs     │      │  │  • PDF/DOC/DOCX parsing │  │
+│ ⑥ Notifier  │ │ gap_anal.  │      │  │  • Gemini AI extraction │  │
 └─────────────┘ └────────────┘      │  │  • Gemini AI extraction │  │
                                     │  │  • Returns structured   │  │
                                     │  │    profile JSON         │  │
@@ -103,6 +107,27 @@ This is a critical architectural boundary. **ResumeAI and the Profile Agent have
 | Profile business logic | ❌ Never does this | ✅ Owns this |
 | Missing field detection | ❌ Never does this | ✅ Owns this |
 | Manual profile editing | ❌ Never does this | ✅ Owns this |
+
+### Gap Analysis — Why the ResumeAI Module Cannot Be Copy-Pasted Directly
+
+The ResumeAI Gap Analysis module (`gap-advisor.service.ts`, `gap-evidence.service.ts`, `gap-taxonomy.service.ts`) is TypeScript running on Node.js and depends on:
+- A **PostgreSQL** database with `portfolio_items`, `job_targets`, `gap_analyses`, and `users.career_goal` tables — none of which exist in OpportunIQ's SQLite schema
+- **BullMQ** queue infrastructure (Node.js-only)
+- **NVIDIA NIM** as the primary LLM provider with Gemini + Groq fallback
+- Portfolio embeddings stored as vector columns in PostgreSQL
+- Authentication middleware tied to the ResumeAI user session system
+
+**OpportunIQ uses Python, FastAPI, SQLite, and Groq.** Direct copy-paste is not possible.
+
+**What IS reused:** The methodology, not the code.
+- The **deterministic evidence scoring** logic (evidence levels 0–3 based on skill presence in profile)
+- The **skill taxonomy mapping** from career goal → required skills
+- The **JD comparison mode** (direct job description → required skills list)
+- The **LLM synthesis pattern** (deterministic gaps computed first, LLM adds narrative and recommendations)
+- The **output schema** (missing\_skills, suggested\_projects, learning\_resources, overall\_assessment)
+- The **hallucination guard** (LLM output filtered against deterministic gap list)
+
+This methodology is re-implemented in `services/gap_analysis_service.py` and `agents/gap_analysis_agent.py` in Python, adapted for OpportunIQ's data model where the student profile (skills, target\_roles) replaces `portfolio_items` and the opportunity's `skills_required` field replaces `job_targets`.
 
 **Data flow for profile setup:**
 ```
@@ -423,6 +448,7 @@ The complete journey of a brand new user across all 14 steps.
 **Left Sidebar Navigation:**
 - Discover (default, `/dashboard`)
 - Saved (`/dashboard/saved`)
+- Gap Advisor (`/dashboard/gap-analysis`) ← NEW
 - Deadlines (`/dashboard/deadlines`)
 - Notifications (`/dashboard/notifications`)
 - Settings (`/dashboard/settings`)
@@ -629,7 +655,7 @@ class OpportunIQState(TypedDict):
 - Action 3 — Filter expired (deadline in past)
 - Output: `ranked_results` (top 15), saved to SQLite `opportunities` table
 
-**④ Guardian Agent**
+**⑤ Guardian Agent**
 - Input: Gmail OAuth token from disk (`token.json`)
 - Action 1 — 3-pass email fetch via Gmail API:
   - Pass 1: `q="subject:(interview OR shortlisted OR application OR offer OR submission OR test OR round OR accept OR congratulations OR selected OR rejected OR deadline OR schedule OR assessment) newer_than:60d"`
@@ -640,8 +666,35 @@ class OpportunIQState(TypedDict):
 - Action 4 — confidence ≥ 0.6 → save to `deadline_registry`; < 0.6 → flag "Needs review"
 - Output: `deadlines_extracted` list
 
-**⑤ Notifier Agent**
-- Input: deadline from `deadline_registry`
+**③ Gap Analysis Agent** *(new — added post Review 1)*
+- Input: `profile_id` + one of: `target_role` (string), `job_description` (raw JD text), or `opportunity_id` (ID of a specific discovered opportunity)
+- **Step 1 — Determine required skills** (deterministic, adapted from ResumeAI `gap-advisor.service.ts`):
+  - If `opportunity_id` provided: load `opportunities.skills_required` from SQLite → use as required skills with frequency 1.0
+  - If `job_description` provided: call Groq to extract `required_skills`, `preferred_skills`, `tech_stack` from JD text → assign frequencies 1.0 / 0.7 / 0.8 → cap at 20 skills
+  - If `target_role` only: use a hardcoded skill taxonomy JSON (adapted from ResumeAI's `skills-taxonomy.json`) to map role → required skill clusters
+- **Step 2 — Score student evidence** (deterministic, adapted from ResumeAI `gap-evidence.service.ts`):
+  - Load `student_profiles.skills` from SQLite
+  - For each required skill: assign evidence level
+    - Level 0: skill not present in student skills list (case-insensitive, also checks synonyms)
+    - Level 1: skill present in student skills list (listed but not "demonstrated")
+    - Level 2: skill present AND appears in `target_roles` context (stronger signal)
+  - Compute `priority`: high (evidence_level=0, frequency≥0.8), medium (level=0, freq<0.8 or level=1, freq≥0.8), low (otherwise)
+  - Compute `learning_path_order` from taxonomy prerequisite ordering
+- **Step 3 — LLM narrative synthesis** (adapted from ResumeAI gap-advisor prompt):
+  - Pass deterministic gap list (max 8 skills) to Groq `openai/gpt-oss-120b` via Instructor
+  - Prompt instructs LLM to: explain WHY each skill matters for the target role, suggest 3 concrete projects that address multiple gaps, recommend 5 specific learning resources with real URLs
+  - LLM is explicitly told **not to invent new gaps** — it can only explain the provided list
+  - Output validated against `GapAnalysisResult` Pydantic schema
+- **Step 4 — Hallucination guard** (adapted from ResumeAI normalization step):
+  - Remove any `missing_skills` LLM invented that are not in the deterministic list
+  - Cap `missing_skills` at 8, `suggested_projects` at 3, `learning_resources` at 5
+  - Verify all resource URLs start with `http`
+  - Replace missing or very short `overall_assessment` with a default template
+- **Step 5 — Persist**: save `GapAnalysisResult` to `gap_analyses` SQLite table
+- Output: `GapAnalysisResult` JSON
+
+**④ Ranker Agent** *(previously ③)*
+- Input: `raw_results`
 - Action 1 — Schedule 4 APScheduler `DateTrigger` jobs per deadline (7d, 3d, 1d, same-day 9 AM)
 - Action 2 (when job fires) — Load deadline + student profile → Groq gpt-oss-120b generates contextual message
 - Action 3 — Store notification in SQLite `notifications` table
@@ -718,6 +771,58 @@ class ReminderMessage(BaseModel):
     subject: str
     body: str
     urgency_level: str          # critical | high | medium
+
+# ── Gap Analysis schemas ───────────────────────────────────────────────────────
+# Adapted from ResumeAI gap-advisor.service.ts output schema.
+# Re-implemented in Python for OpportunIQ's stack.
+
+class EvidenceLevel(int):
+    """
+    0 = skill not found anywhere in student profile
+    1 = skill listed in profile but not demonstrated via projects
+    2 = skill appears in profile skills list or opportunity context
+    3 = skill well-evidenced (multiple projects, high validation)
+    In OpportunIQ: levels 2–3 are simplified to "in profile skills" vs "not in profile"
+    since we don't have portfolio items. Level determined by skills list presence.
+    """
+    pass
+
+class SkillEvidence(BaseModel):
+    skill: str
+    evidence_level: int             # 0 | 1 | 2 — simplified from ResumeAI's 0–3
+    evidence_summary: str           # human-readable: "Not in your profile" etc.
+    jd_frequency: float             # 1.0 = required, 0.8 = tech stack, 0.7 = preferred
+    priority: str                   # high | medium | low
+    learning_path_order: int        # 1 = learn first (taxonomy prerequisite order)
+    cluster_name: Optional[str]     # skill cluster from taxonomy e.g. "Backend Infrastructure"
+
+class MissingSkill(BaseModel):
+    skill: str
+    priority: str                   # high | medium | low
+    reason: str                     # LLM-generated explanation (validated against deterministic data)
+    evidence_level: int
+    learning_path_order: int
+    cluster_name: Optional[str]
+    learning_resources: List[dict]  # [{ "resource": str, "url": str }]
+
+class SuggestedProject(BaseModel):
+    project_type: str
+    description: str
+    skills_addressed: List[str]     # capped at 3, only valid gap skills
+
+class GapAnalysisResult(BaseModel):
+    id: str
+    profile_id: str
+    target_role: str                # the student's target role (replaces career_goal)
+    analysis_mode: str              # "profile_vs_role" | "profile_vs_jd" | "profile_vs_opportunity"
+    overall_assessment: str         # LLM-generated summary (validated: min 20 chars)
+    missing_skills: List[MissingSkill]  # capped at 8, only deterministic gaps
+    suggested_projects: List[SuggestedProject]  # capped at 3
+    evidence_data: List[SkillEvidence]           # full deterministic scoring
+    jd_snippet: Optional[str]       # first 300 chars of JD if provided
+    profile_snapshot: dict          # { skills_count, target_roles, opportunity_title }
+    generated_at: str
+    is_stale: bool                  # True if older than 7 days
 ```
 
 ---
@@ -799,6 +904,25 @@ CREATE TABLE IF NOT EXISTS saved_opportunities (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Gap analysis results
+-- One row per (profile_id, opportunity_id) pair for opportunity-specific analyses.
+-- One row per profile_id with opportunity_id = NULL for role-level analyses.
+-- Adapted from ResumeAI gap_analyses table — simplified for SQLite and OpportunIQ data model.
+CREATE TABLE IF NOT EXISTS gap_analyses (
+    id TEXT PRIMARY KEY,
+    profile_id TEXT NOT NULL,
+    opportunity_id TEXT,              -- NULL if analysis is against target_role only
+    target_role TEXT NOT NULL,        -- role being analysed against (replaces career_goal)
+    analysis_mode TEXT NOT NULL,      -- profile_vs_role | profile_vs_jd | profile_vs_opportunity
+    overall_assessment TEXT,
+    missing_skills TEXT,              -- JSON array of MissingSkill objects
+    suggested_projects TEXT,          -- JSON array of SuggestedProject objects
+    evidence_data TEXT,               -- JSON array of SkillEvidence objects
+    jd_snippet TEXT,                  -- first 300 chars of JD if used
+    profile_snapshot TEXT,            -- JSON: { skills_count, target_roles }
+    generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Notifications
 CREATE TABLE IF NOT EXISTS notifications (
     id TEXT PRIMARY KEY,
@@ -846,6 +970,9 @@ CREATE TABLE IF NOT EXISTS notifications (
 | GET | `/api/settings/notifications` | Get reminder preferences | — | `{ r_7d, r_3d, r_1d, r_same_day }` |
 | PUT | `/api/settings/notifications` | Update reminder preferences | preference booleans | `{ success }` |
 | WS | `/ws/agent-trace` | Stream agent step events | `?session_id=X` | Event JSON stream |
+| POST | `/api/gap-analysis/run` | Run gap analysis for a profile vs role or JD | `{ profile_id, target_role?, job_description?, opportunity_id? }` | `GapAnalysisResult` |
+| GET | `/api/gap-analysis/{profile_id}` | Get latest persisted gap analysis for profile | — | `GapAnalysisResult` (with `is_stale` flag if >7 days old) |
+| GET | `/api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}` | Get opportunity-specific gap analysis | — | `GapAnalysisResult` or 404 if not yet run |
 
 ---
 
@@ -878,6 +1005,7 @@ opportuniq-backend/
 │   ├── graph.py         # LangGraph StateGraph definition
 │   ├── profile_agent.py
 │   ├── discovery_agent.py
+│   ├── gap_analysis_agent.py  # ← NEW: Gap Analysis Agent
 │   ├── ranker_agent.py
 │   ├── guardian_agent.py
 │   └── notifier_agent.py
@@ -887,6 +1015,7 @@ opportuniq-backend/
 │   ├── deadlines.py
 │   ├── gmail.py
 │   ├── notifications.py
+│   ├── gap_analysis.py        # ← NEW: Gap Analysis routes
 │   └── settings.py
 ├── services/
 │   ├── jobspy_service.py
@@ -894,7 +1023,10 @@ opportuniq-backend/
 │   ├── gmail_service.py
 │   ├── groq_service.py
 │   ├── ranker_service.py
-│   └── scheduler_service.py
+│   ├── scheduler_service.py
+│   └── gap_analysis_service.py  # ← NEW: deterministic scoring + taxonomy
+├── data/
+│   └── skills_taxonomy.json     # ← NEW: adapted from ResumeAI skills-taxonomy.json
 ├── .env                 # All API keys (never commit)
 └── requirements.txt
 ```
@@ -939,6 +1071,7 @@ opportuniq-frontend/src/
 │   ├── Dashboard.jsx
 │   ├── DeadlineCalendar.jsx
 │   ├── SavedOpportunities.jsx
+│   ├── GapAnalysisPage.jsx       ← NEW
 │   ├── Notifications.jsx
 │   └── Settings.jsx
 ├── components/
@@ -946,6 +1079,7 @@ opportuniq-frontend/src/
 │   ├── Sidebar.jsx
 │   ├── OpportunityCard.jsx
 │   ├── OpportunityDetailDrawer.jsx
+│   ├── GapAnalysisCard.jsx       ← NEW
 │   ├── AgentTracePanel.jsx
 │   ├── GmailConnectCard.jsx
 │   ├── DeadlineMiniCalendar.jsx
@@ -1275,6 +1409,468 @@ def score(opportunity: dict, student_skills: list[str]) -> float:
 
 ---
 
+---
+
+### STEP 3.5 — Gap Analysis Agent *(Hours 8–14, parallel with Step 4)*
+
+> **Context:** This step implements the Gap Analysis Agent — adapted from ResumeAI's `gap-advisor.service.ts`, `gap-evidence.service.ts`, and `gap-taxonomy.service.ts` — natively in Python. The core methodology is preserved: deterministic evidence scoring first, then LLM narrative synthesis, then hallucination guard. The code is new Python; the logic is from ResumeAI.
+
+---
+
+**Person A — `routers/gap_analysis.py` + agent wiring**
+
+Build `routers/gap_analysis.py` with 3 endpoints:
+
+`POST /api/gap-analysis/run`
+- Accept body: `{ "profile_id": str, "target_role": str (optional), "job_description": str (optional), "opportunity_id": str (optional) }`
+- Validate: at least one of `target_role`, `job_description`, or `opportunity_id` must be provided
+- If `job_description` provided and len < 50 chars → return 422 "Job description must be at least 50 characters"
+- Call `gap_analysis_agent.run(profile_id, target_role, job_description, opportunity_id)`
+- Return `GapAnalysisResult` JSON
+- Emit agent trace events via WebSocket during processing
+
+`GET /api/gap-analysis/{profile_id}`
+- Fetch latest persisted `gap_analyses` row for `profile_id` where `opportunity_id IS NULL`
+- If no row exists → return 404 with message "No gap analysis found. Run POST /api/gap-analysis/run first."
+- If `generated_at` is older than 7 days → add `is_stale: true` to response
+- Return `GapAnalysisResult` JSON
+
+`GET /api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}`
+- Fetch `gap_analyses` row where both `profile_id` AND `opportunity_id` match
+- Return `GapAnalysisResult` or 404
+
+---
+
+**Person B — `GapAnalysisPage.jsx` + `GapAnalysisCard.jsx`**
+
+Build `pages/GapAnalysisPage.jsx` — accessible from the sidebar as "Gap Advisor":
+
+**Two tabs (mirroring ResumeAI's Gap Advisor page):**
+
+Tab 1 — "My Target Role":
+- Load existing analysis via `GET /api/gap-analysis/{profile_id}` on mount
+- If none exists → empty state: "Run your first gap analysis" button
+- If stale → amber banner: "This analysis is 8+ days old — re-run for fresh results"
+- "Re-run Analysis" button → `POST /api/gap-analysis/run` with just `{ profile_id, target_role: profile.target_roles[0] }`
+
+Tab 2 — "Against a Job Description":
+- Textarea for pasting a JD (minimum 50 characters enforced client-side)
+- "Analyse" button → `POST /api/gap-analysis/run` with `{ profile_id, job_description: pastedJD }`
+- Results shown immediately below — clearly labelled "This analysis is not saved"
+
+Build `components/GapAnalysisCard.jsx` — renders a `GapAnalysisResult`:
+- **Profile Snapshot section**: total skills count, target roles, when generated
+- **Overall Assessment**: paragraph text
+- **Skills to Close the Gap**: list of `missing_skills`, each card showing:
+  - Skill name + priority badge (red = high, amber = medium, grey = low)
+  - Evidence badge: "Not in your profile" (evidence_level=0) or "Listed but not demonstrated" (level=1)
+  - Reason text (LLM-generated)
+  - Learning resources as clickable links
+- **Suggested Projects**: 3 project cards, each showing type, description, and skills addressed as tags
+- "Run Again" button at the bottom
+
+Also add a **"View Gap Analysis" button** on `OpportunityDetailDrawer.jsx`:
+- Calls `GET /api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}`
+- If 404 → shows "Run Gap Analysis for this role" button → triggers `POST /api/gap-analysis/run` with `opportunity_id`
+- Once complete → renders `GapAnalysisCard` inline in the drawer
+
+---
+
+**Person C — `services/gap_analysis_service.py` + `agents/gap_analysis_agent.py` + `data/skills_taxonomy.json`**
+
+**Build `data/skills_taxonomy.json`** — adapted from ResumeAI's `skills-taxonomy.json`. This is a hardcoded JSON file. Build it with at least these role → skill cluster mappings:
+
+```json
+{
+  "role_patterns": {
+    "sde intern": ["Python", "Data Structures", "Algorithms", "Git", "SQL", "Problem Solving"],
+    "ml intern": ["Python", "Machine Learning", "NumPy", "Pandas", "Scikit-learn", "Statistics"],
+    "data analyst": ["SQL", "Python", "Excel", "Data Visualization", "Statistics", "Pandas"],
+    "frontend intern": ["HTML", "CSS", "JavaScript", "React", "Git", "Responsive Design"],
+    "backend intern": ["Python", "REST APIs", "SQL", "FastAPI", "Git", "Authentication"],
+    "full stack": ["React", "Node.js", "SQL", "REST APIs", "Git", "HTML", "CSS"],
+    "devops": ["Linux", "Docker", "CI/CD", "Git", "Cloud Platforms", "Shell Scripting"],
+    "data engineer": ["Python", "SQL", "ETL", "Apache Spark", "Cloud Platforms", "Data Warehousing"]
+  },
+  "skill_clusters": {
+    "Python": "Core Programming",
+    "Data Structures": "Core Programming",
+    "Algorithms": "Core Programming",
+    "Machine Learning": "AI/ML",
+    "SQL": "Data",
+    "React": "Frontend",
+    "Docker": "DevOps"
+  },
+  "prerequisites": {
+    "Machine Learning": ["Python", "NumPy", "Statistics"],
+    "React": ["HTML", "CSS", "JavaScript"],
+    "FastAPI": ["Python", "REST APIs"]
+  },
+  "skill_synonyms": {
+    "js": "JavaScript",
+    "ml": "Machine Learning",
+    "dl": "Deep Learning",
+    "nlp": "Natural Language Processing"
+  }
+}
+```
+
+Add more roles and skills as time permits. The more complete this is, the better the career-goal mode results.
+
+**Build `services/gap_analysis_service.py`** — three functions (adapted from ResumeAI's deterministic services):
+
+```python
+import json, uuid, os
+from datetime import datetime
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+from models import GapAnalysisResult, MissingSkill, SuggestedProject, SkillEvidence
+
+# Load taxonomy once
+with open("data/skills_taxonomy.json") as f:
+    TAXONOMY = json.load(f)
+
+model = SentenceTransformer('all-MiniLM-L6-v2')  # already pre-downloaded
+
+
+def determine_required_skills(
+    target_role: str | None,
+    jd_extracted: dict | None,     # from groq_service.extract_jd_skills() if JD provided
+    opportunity_skills: list | None  # from opportunity.skills_required if opportunity_id provided
+) -> list[dict]:
+    """
+    Returns list of { skill, frequency } pairs.
+    Priority: opportunity_skills > jd_extracted > taxonomy mapping.
+    Adapted from ResumeAI gap-advisor.service.ts determineRequiredSkills().
+    """
+    if opportunity_skills:
+        # Direct opportunity mode: required=1.0
+        return [{"skill": s, "frequency": 1.0} for s in opportunity_skills[:20]]
+
+    if jd_extracted:
+        # JD comparison mode: adapted from ResumeAI jd_comparison mode
+        skills = []
+        for s in jd_extracted.get("required_skills", []):
+            skills.append({"skill": s, "frequency": 1.0})
+        for s in jd_extracted.get("tech_stack", []):
+            if s not in [x["skill"] for x in skills]:
+                skills.append({"skill": s, "frequency": 0.8})
+        for s in jd_extracted.get("preferred_skills", []):
+            if s not in [x["skill"] for x in skills]:
+                skills.append({"skill": s, "frequency": 0.7})
+        return skills[:20]
+
+    if target_role:
+        # Career-goal / taxonomy mode
+        role_key = target_role.lower().strip()
+        matched = None
+        for pattern in TAXONOMY["role_patterns"]:
+            if pattern in role_key or role_key in pattern:
+                matched = pattern
+                break
+        if matched:
+            return [{"skill": s, "frequency": 1.0}
+                    for s in TAXONOMY["role_patterns"][matched]]
+        # Fallback: generic professional skills
+        return [{"skill": s, "frequency": 0.8}
+                for s in ["Python", "Git", "SQL", "Communication", "Problem Solving"]]
+    return []
+
+
+def score_student_evidence(
+    required_skills: list[dict],
+    student_skills: list[str]
+) -> list[SkillEvidence]:
+    """
+    Deterministic evidence scoring. Adapted from ResumeAI gap-evidence.service.ts.
+    Evidence levels simplified for OpportunIQ's data model (no portfolio_items):
+      0 = not in student skills list and no semantic match
+      1 = in student skills list (listed)
+      2 = in student skills and is a primary skill (high confidence)
+    """
+    student_lower = [s.lower() for s in student_skills]
+    synonyms = TAXONOMY.get("skill_synonyms", {})
+    evidence_list = []
+
+    for req in required_skills:
+        skill = req["skill"]
+        freq = req["frequency"]
+        skill_lower = skill.lower()
+
+        # Check synonyms
+        canonical = synonyms.get(skill_lower, skill_lower)
+
+        # Evidence level determination
+        if canonical in student_lower or skill_lower in student_lower:
+            evidence_level = 1  # listed in profile
+            evidence_summary = f"'{skill}' is listed in your profile skills"
+        else:
+            # Semantic similarity check (optional enrichment)
+            if student_skills:
+                skill_emb = model.encode([skill])[0]
+                stu_emb = model.encode([" ".join(student_skills)])[0]
+                sim = float(cosine_similarity([skill_emb], [stu_emb])[0][0])
+            else:
+                sim = 0.0
+
+            if sim > 0.75:
+                evidence_level = 1  # semantically similar to profile content
+                evidence_summary = f"'{skill}' is similar to skills in your profile"
+            else:
+                evidence_level = 0
+                evidence_summary = f"'{skill}' was not found in your profile"
+
+        # Priority: high if missing (level=0) and frequently required, else medium/low
+        if evidence_level == 0 and freq >= 0.8:
+            priority = "high"
+        elif evidence_level == 0 and freq < 0.8:
+            priority = "medium"
+        elif evidence_level == 1 and freq >= 0.9:
+            priority = "medium"
+        else:
+            priority = "low"
+
+        cluster = TAXONOMY["skill_clusters"].get(skill, "General")
+
+        # Learning path order from prerequisites
+        prereqs = TAXONOMY.get("prerequisites", {})
+        order = 1 if skill not in prereqs else 2  # skills with prerequisites come later
+
+        evidence_list.append(SkillEvidence(
+            skill=skill,
+            evidence_level=evidence_level,
+            evidence_summary=evidence_summary,
+            jd_frequency=freq,
+            priority=priority,
+            learning_path_order=order,
+            cluster_name=cluster
+        ))
+
+    # Sort: high priority first, then by frequency
+    evidence_list.sort(key=lambda x: (x.priority != "high", x.priority != "medium", -x.jd_frequency))
+    return evidence_list
+
+
+def normalize_llm_output(
+    llm_result: dict,
+    deterministic_gaps: list[SkillEvidence]
+) -> tuple[list[MissingSkill], list[SuggestedProject]]:
+    """
+    Hallucination guard. Adapted from ResumeAI normalization step.
+    Removes LLM-invented skills. Caps lists. Validates URLs.
+    """
+    valid_gap_skills = {e.skill.lower() for e in deterministic_gaps if e.evidence_level == 0}
+
+    # Filter missing_skills to only those in deterministic list
+    missing = []
+    for ms in llm_result.get("missing_skills", [])[:8]:
+        if ms.get("skill", "").lower() in valid_gap_skills:
+            # Validate learning resources
+            resources = [
+                r for r in ms.get("learning_resources", [])[:5]
+                if r.get("url", "").startswith("http")
+            ]
+            # Use deterministic evidence for priority and order
+            det = next((e for e in deterministic_gaps if e.skill.lower() == ms["skill"].lower()), None)
+            missing.append(MissingSkill(
+                skill=ms["skill"],
+                priority=det.priority if det else ms.get("priority", "medium"),
+                reason=ms.get("reason") or f"'{ms['skill']}' is required for this role and not present in your profile.",
+                evidence_level=det.evidence_level if det else 0,
+                learning_path_order=det.learning_path_order if det else 1,
+                cluster_name=det.cluster_name if det else None,
+                learning_resources=resources
+            ))
+
+    # Filter suggested projects: only reference valid gap skills
+    projects = []
+    for sp in llm_result.get("suggested_projects", [])[:3]:
+        valid_addressed = [
+            s for s in sp.get("skills_addressed", [])
+            if s.lower() in valid_gap_skills
+        ][:5]
+        projects.append(SuggestedProject(
+            project_type=sp.get("project_type", "Project"),
+            description=sp.get("description", ""),
+            skills_addressed=valid_addressed
+        ))
+
+    return missing, projects
+```
+
+**Build `agents/gap_analysis_agent.py`** — the orchestrator:
+
+```python
+import uuid, json
+from datetime import datetime
+from services.gap_analysis_service import (
+    determine_required_skills, score_student_evidence, normalize_llm_output
+)
+from services.groq_service import run_gap_analysis_llm, extract_jd_skills
+from models import GapAnalysisResult
+
+async def run(profile_id: str, target_role: str = None,
+              job_description: str = None, opportunity_id: str = None,
+              session_id: str = None) -> GapAnalysisResult:
+    from main import emit_trace
+    import aiosqlite
+    from database import DB_PATH
+
+    await emit_trace(session_id, "Gap Analysis Agent", "running", "Loading student profile...")
+
+    async with aiosqlite.connect(DB_PATH) as db:
+        # 1. Load profile
+        row = await (await db.execute(
+            "SELECT skills, target_roles FROM student_profiles WHERE id = ?", [profile_id]
+        )).fetchone()
+        if not row:
+            raise ValueError("Profile not found")
+        student_skills = json.loads(row[0] or "[]")
+        target_roles = json.loads(row[1] or "[]")
+        effective_role = target_role or (target_roles[0] if target_roles else "Software Engineer")
+
+        # 2. Load opportunity skills if opportunity_id provided
+        opp_skills = None
+        if opportunity_id:
+            opp = await (await db.execute(
+                "SELECT skills_required, title FROM opportunities WHERE id = ?", [opportunity_id]
+            )).fetchone()
+            if opp:
+                opp_skills = json.loads(opp[0] or "[]")
+                effective_role = effective_role or opp[1]
+
+    await emit_trace(session_id, "Gap Analysis Agent", "running", "Determining required skills...")
+
+    # 3. Extract JD skills if JD provided
+    jd_extracted = None
+    if job_description:
+        jd_extracted = await extract_jd_skills(job_description)  # add this to groq_service.py
+
+    # 4. Determine required skills (deterministic)
+    required = determine_required_skills(effective_role, jd_extracted, opp_skills)
+    if not required:
+        raise ValueError("Could not determine required skills for this role")
+
+    await emit_trace(session_id, "Gap Analysis Agent", "running", "Scoring your profile against required skills...")
+
+    # 5. Score evidence (deterministic)
+    evidence = score_student_evidence(required, student_skills)
+    gaps = [e for e in evidence if e.evidence_level == 0][:8]
+
+    await emit_trace(session_id, "Gap Analysis Agent", "running", "Generating improvement recommendations...")
+
+    # 6. LLM synthesis (narrative + projects + resources)
+    llm_payload = {
+        "target_role": effective_role,
+        "student_skills": student_skills,
+        "gaps": [{"skill": g.skill, "priority": g.priority, "cluster": g.cluster_name} for g in gaps]
+    }
+    llm_result = await run_gap_analysis_llm(llm_payload)  # add to groq_service.py
+
+    # 7. Normalize (hallucination guard)
+    missing_skills, suggested_projects = normalize_llm_output(llm_result, evidence)
+
+    # 8. Build result
+    mode = "profile_vs_opportunity" if opportunity_id else ("profile_vs_jd" if job_description else "profile_vs_role")
+    result = GapAnalysisResult(
+        id=str(uuid.uuid4()),
+        profile_id=profile_id,
+        target_role=effective_role,
+        analysis_mode=mode,
+        overall_assessment=llm_result.get("overall_assessment") or f"Analysis complete for {effective_role}.",
+        missing_skills=missing_skills,
+        suggested_projects=suggested_projects,
+        evidence_data=evidence,
+        jd_snippet=job_description[:300] if job_description else None,
+        profile_snapshot={"skills_count": len(student_skills), "target_roles": target_roles},
+        generated_at=datetime.now().isoformat(),
+        is_stale=False
+    )
+
+    # 9. Persist to SQLite (upsert: one row per profile+opportunity pair)
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO gap_analyses
+            (id, profile_id, opportunity_id, target_role, analysis_mode,
+             overall_assessment, missing_skills, suggested_projects,
+             evidence_data, jd_snippet, profile_snapshot, generated_at)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+        """, [
+            result.id, profile_id, opportunity_id, effective_role, mode,
+            result.overall_assessment,
+            json.dumps([ms.dict() for ms in missing_skills]),
+            json.dumps([sp.dict() for sp in suggested_projects]),
+            json.dumps([ev.dict() for ev in evidence]),
+            result.jd_snippet,
+            json.dumps(result.profile_snapshot),
+            result.generated_at
+        ])
+        await db.commit()
+
+    await emit_trace(session_id, "Gap Analysis Agent", "complete", f"Gap analysis complete — {len(missing_skills)} skill gaps identified")
+    return result
+```
+
+**Add two functions to `services/groq_service.py`:**
+
+```python
+async def extract_jd_skills(job_description: str) -> dict:
+    """Extract required/preferred/tech skills from a pasted JD. Used by Gap Analysis Agent."""
+    # Returns { required_skills: [], preferred_skills: [], tech_stack: [] }
+    return client_120b.create(
+        model="openai/gpt-oss-120b",
+        response_model=...,  # create a JDSkillsExtraction Pydantic model
+        messages=[{"role": "user", "content":
+            f"Extract skills from this job description into three categories: required_skills, preferred_skills, tech_stack. Return as JSON.\n\n{job_description[:3000]}"}]
+    )
+
+async def run_gap_analysis_llm(payload: dict) -> dict:
+    """LLM synthesis for Gap Analysis. Returns narrative + project suggestions + resources."""
+    # CRITICAL: prompt must instruct LLM not to invent skills outside the provided gaps list
+    prompt = f"""You are a career advisor. A student's profile has been analysed against the role '{payload["target_role"]}'.
+    
+The following skill gaps were deterministically identified:
+{json.dumps(payload['gaps'], indent=2)}
+
+The student's current skills: {', '.join(payload['student_skills'])}
+
+Your task:
+1. For each gap skill, write a 1-2 sentence explanation of WHY this skill matters for {payload['target_role']}.
+2. Suggest exactly 3 projects the student can build to address multiple gaps. Be specific and practical.
+3. For each gap skill, suggest 1 real learning resource with a real URL (must start with http).
+4. Write a 2-3 sentence overall assessment of the student's readiness for {payload['target_role']}.
+
+IMPORTANT: Only address the skills listed above. Do NOT add new gap skills not in the list above.
+
+Return as JSON matching this schema:
+{{
+  "overall_assessment": "...",
+  "missing_skills": [
+    {{"skill": "...", "reason": "...", "learning_resources": [{{"resource": "...", "url": "http..."}}]}}
+  ],
+  "suggested_projects": [
+    {{"project_type": "...", "description": "...", "skills_addressed": ["..."]}}
+  ]
+}}"""
+    # Call Groq via instructor — use gpt-oss-120b for quality
+    response = groq_client.chat.completions.create(
+        model="openai/gpt-oss-120b",
+        messages=[{"role": "user", "content": prompt}],
+        response_format={"type": "json_object"}
+    )
+    return json.loads(response.choices[0].message.content)
+```
+
+**Done when:**
+- `POST /api/gap-analysis/run` with `{ profile_id, target_role: "SDE Intern" }` → returns `GapAnalysisResult` with `missing_skills` array (all items from deterministic evidence, not LLM hallucinations)
+- `POST /api/gap-analysis/run` with `{ profile_id, job_description: "..." }` (min 50 chars) → JD mode works
+- `GET /api/gap-analysis/{profile_id}` → returns the persisted result
+- Gap Analysis Page Tab 1 renders the overall assessment + missing skills cards + suggested projects
+- Gap Analysis Page Tab 2 allows JD paste and shows ephemeral result
+- "View Gap Analysis" button in `OpportunityDetailDrawer` triggers and renders the analysis for that specific opportunity
+
+---
+
 ### STEP 4 — Discovery Frontend *(Hours 8–14, parallel with Step 3)*
 
 **Person B — Dashboard layout + opportunity feed**
@@ -1502,6 +2098,7 @@ Build "Test Reminder" API: `POST /api/notifications/test` → immediately call `
 
 **Person B — Remaining frontend pages**
 - `SavedOpportunities.jsx` — stats row + table with inline status dropdown
+- `GapAnalysisPage.jsx` — two tabs: career goal mode and JD comparison mode. Renders `GapAnalysisCard`. See Step 3.5 for full spec.
 - `Notifications.jsx` — tabbed list, mark read actions
 - `Settings.jsx` — accordion sections, all 6 settings panels
 - `NotificationBell.jsx` — badge count from `GET /api/notifications?unread=true`, WebSocket listener updates count in real time
@@ -1747,6 +2344,7 @@ load_dotenv()
 
 ---
 
-*Build Plan v2.0 — OpportunIQ | TATA Centre AI/ML Hackathon*
-*Updated to reflect confirmed ResumeAI microservice architecture (TypeScript/Node.js, POST /api/v1/profile/extract, multipart/form-data).*
+*Build Plan v2.1 — OpportunIQ | TATA Centre AI/ML Hackathon*
+*v2.0: ResumeAI microservice architecture confirmed (TypeScript/Node.js, POST /api/v1/profile/extract).*
+*v2.1: Gap Analysis Agent added following Review 1 feedback. Methodology adapted from ResumeAI gap-advisor.service.ts, re-implemented natively in Python/FastAPI/SQLite. See Step 3.5 and Section 6 for full details.*
 *All three team members work in parallel from Step 2 onwards.*

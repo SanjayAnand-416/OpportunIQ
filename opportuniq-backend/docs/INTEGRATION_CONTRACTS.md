@@ -65,7 +65,7 @@ buffered events, accepts `ping`, and responds with `pong`.
 | Exceptions | configuration -> unavailable; timeout -> timeout; malformed response -> upstream/contract error |
 | Timeout | `EXTERNAL_HTTP_TIMEOUT_SECONDS` |
 | Fallback | manual profile creation; upload never returns fake extraction success |
-| Status | **guarded missing**. A root `services.resume_service` has an incompatible `UploadFile` signature and legacy model imports; no active adapter exists. |
+| Status | **CONTRACT_VERIFIED**. `app.services.resume_service` adapts the root HTTP contract to bytes/name/content type and active profile fields. Live extraction is not verified. |
 
 ## Tavily Contract
 
@@ -160,6 +160,12 @@ buffered events, accepts `ping`, and responds with `pong`.
 
 ## Gap Analysis Agent Contract
 
+Public result retrieval uses `GET /api/gap-analysis/analysis/{analysis_id}`.
+Latest role analysis remains `GET /api/gap-analysis/{profile_id}`, and an
+opportunity-specific result uses
+`GET /api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}`. Static
+`/analysis/` routing must remain ahead of the dynamic profile route.
+
 | Item | Contract |
 |---|---|
 | Active module | `app.agents.gap_analysis_agent` or `app.services.gap_analysis_service` |
@@ -203,7 +209,7 @@ demo modes retain the same public API shapes.
 | Frontend feature | Frontend request | Backend route | Status | Mismatch |
 |---|---|---|---|---|
 | Manual profile | `POST /api/profile/manual` | Same | ALIGNED | Reuses existing profile form and stores public profile ID |
-| Resume upload | multipart `file` | `POST /api/profile/upload`, field `file` | ALIGNED | Live ResumeAI remains guarded missing |
+| Resume upload | multipart `file` | `POST /api/profile/upload`, field `file` | ALIGNED | Adapter contract verified; live ResumeAI unverified |
 | Profile retrieve/edit | `GET/PATCH /api/profile/{profile_id}` | Same | ALIGNED | Public ID stored as `opportuniq:profileId` |
 | Opportunity search | `POST /api/opportunities/search` | Same | ALIGNED | Controlled provider fallback still needed in UI |
 | Opportunity results | `GET /api/opportunities` by profile/session | Same | ALIGNED | None |
@@ -226,8 +232,39 @@ demo modes retain the same public API shapes.
 - **Mock verified:** active routers, repositories, scheduler, WebSocket,
   reminder Groq/SMTP boundaries.
 - **Adapter only:** reminder Groq and SMTP.
-- **Guarded missing:** ResumeAI, Tavily, discovery extraction/ranking, Gmail,
-  Guardian, and canonical Gap Analysis execution.
+- **Contract verified:** ResumeAI active HTTP adapter and manual fallback.
+- **Guarded missing:** Tavily, discovery extraction/ranking, Gmail, Guardian,
+  and canonical Gap Analysis execution.
 - **Not performed:** live external API, OAuth, model download, or email checks.
 - **Frontend validation:** npm lockfile synchronized; ESLint and production
   build pass. No frontend unit-test or typecheck script is configured.
+
+## Post-Teammate Reconciliation Inventory
+
+Revalidated on 2026-08-01 after merge `2fcefd4`. The only files added after the
+previous readiness report are Person B's Gap Advisor frontend modules. No new
+backend file was added after that report. Root-level teammate implementations
+remain outside the active `app` package and are not production imports.
+
+| Integration | Actual module and callable | Execution and return | Error/timeout/fallback | Persistence and consumer | Status |
+|---|---|---|---|---|---|
+| ResumeAI | Root `services.resume_service.forward_to_resumeai(file: UploadFile)` and async mapper use legacy `models`; active adapter accepts bytes/name/content type and maps active fields | async HTTP forward; sync active mapper | controlled 503/504/422/502 plus manual fallback | Active profile router/repository; Resume Upload page | **CONTRACT_VERIFIED** |
+| JobSpy | `app.services.jobspy_service.search_jobs(role, location, opportunity_type, results_wanted=15, hours_old=168)` | async `list[dict]`; blocking library offloaded | `JOBSPY_TIMEOUT_SECONDS`; returns empty list on failure | Opportunity router/repository; Dashboard | **CONTRACT_ALIGNED**, **MOCK_VERIFIED** |
+| Tavily | No active or root `tavily_service.py` | unavailable | guarded partial discovery; JobSpy fallback | Opportunity router; Dashboard | **STILL_MISSING**, **FALLBACK_READY** |
+| Opportunity Groq | Root `services.groq_service.extract_opportunity(...)`; active `app.services.groq_service` exposes reminders only | async Pydantic root model | root exceptions/timeouts; router skips failed items | Opportunity router/repository; Dashboard | **CONTRACT_MISMATCH**, **FALLBACK_READY** |
+| Ranking | Root `services.ranker_service.deduplicate(...)` and `score(...)`; active ranker absent | sync Pydantic lists; embedding model lazy | no active adapter timeout; router uses conservative fallback ordering | Opportunity router/repository; Dashboard | **CONTRACT_MISMATCH**, **FALLBACK_READY** |
+| Gmail OAuth | `app.services.gmail_service` absent; no root equivalent | unavailable | guarded 503/409; seeded deadline fallback | Gmail router/repository; Gmail cards/Settings | **STILL_MISSING**, **FALLBACK_READY** |
+| Guardian | `app.agents.guardian_agent` absent; no root equivalent | unavailable | guarded scan trace/fallback | Must call `deadline_service.create_gmail_deadline`; Gmail cards | **STILL_MISSING**, **FALLBACK_READY** |
+| Deadline callback | `app.services.deadline_service.create_gmail_deadline(...)` | async `dict` with deadline/schedule | normalized/idempotent; scheduler failure isolated | Deadline repository and scheduler; Calendar | **CONTRACT_ALIGNED**, **MOCK_VERIFIED** |
+| Reminder Groq | `app.services.groq_service.generate_reminder(...)` | async `ReminderMessage` | bounded scheduler call; deterministic text fallback | Scheduler; Notifications | **CONTRACT_ALIGNED**, **MOCK_VERIFIED**, **LIVE_SMOKE_PENDING** |
+| SMTP | `app.services.email_service.send_reminder_email(*, to_email, subject, body)` | async `bool`; SMTP offloaded | `SMTP_TIMEOUT_SECONDS`; dashboard survives failure | Scheduler/notification repository; Notifications | **CONTRACT_ALIGNED**, **MOCK_VERIFIED**, **LIVE_SMOKE_PENDING** |
+| Gap deterministic service | Root `services.gap_analysis_service` helpers; active service absent | sync models; import initializes embedding model | import/model availability is not safely bounded | Root agent only; Gap Advisor | **CONTRACT_MISMATCH** |
+| Gap Agent | Root `agents.gap_analysis_agent.run(...)`; active agent absent | async `GapAnalysisResult` | router timeout exists, but root agent uses direct SQLite | Active router requires repository-owned persistence; Gap Advisor | **CONTRACT_MISMATCH**, **FALLBACK_READY** |
+| Taxonomy | Root `data/skills_taxonomy.json`; active `app/data` absent | JSON loaded by root service | root load is import-time | Root deterministic service; Gap Advisor | **CONTRACT_MISMATCH** |
+| Frontend client | Shared Axios API modules plus WebSocket hooks; new `api/gapAnalysis.js` | async response data | controlled errors and loading cleanup | All pages | **CONTRACT_ALIGNED** except analysis detail route |
+
+The new Gap Advisor runs `POST /api/gap-analysis/run` and retrieves the latest
+profile result correctly. Its results page routes by `analysisId` and calls
+`GET /api/gap-analysis/{analysisId}`, while that backend path currently means
+`profile_id`. This is a confirmed **CONTRACT_MISMATCH** requiring a distinct
+analysis-by-ID route or a frontend route-state change.

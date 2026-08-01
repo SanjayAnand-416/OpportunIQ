@@ -217,3 +217,51 @@ uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
 - Every claimed live integration has an observed PASS result.
 - The demo database, `.env`, credentials, tokens, caches, and build output are
   untracked.
+
+## Post-Teammate Gap Advisor Flow
+
+1. Open `/dashboard/gap-analysis` with a valid public profile ID in application
+   state.
+2. Existing role analysis loads from `GET /api/gap-analysis/{profile_id}`.
+3. A result card opens `/dashboard/gap-analysis/{analysis_id}`; the frontend
+   retrieves it from `GET /api/gap-analysis/analysis/{analysis_id}`.
+4. Opportunity-specific results use
+   `GET /api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}`.
+5. Only run `POST /api/gap-analysis/run` when an active-package Gap Agent is
+   installed and verified. Otherwise present seeded persisted analysis and label
+   it as demo data; a controlled 503 is expected for a new run.
+
+Before the demo, run these quick checks (about 15 seconds for backend tests and
+under a minute including frontend install/build on a warm cache):
+
+```bash
+cd opportuniq-backend
+.venv/bin/python scripts/validate_openapi.py
+.venv/bin/python scripts/validate_frontend_contracts.py
+.venv/bin/python -m pytest -q
+
+cd ../opportuniq-frontend
+npm run lint
+npm run build
+```
+
+Credential readiness is based on presence and an observed opt-in smoke result,
+never on displaying values. `GROQ_API_KEY`, `TAVILY_API_KEY`, SMTP credentials,
+ResumeAI settings, and Google OAuth files are not considered live merely because
+they exist. Run `python scripts/smoke_live_integrations.py` without flags first;
+enable one provider at a time only when its canonical active module is present.
+
+Current reconciliation status: local backend and Gap result retrieval are live
+verified; JobSpy/reminder/email paths are mock verified; ResumeAI is contract
+verified with a guarded manual fallback; Tavily, discovery extraction/ranking,
+Gmail, Guardian, and full Gap generation remain guarded. Browser E2E is deferred
+because the frontend has no configured browser test framework.
+
+For ResumeAI, configure `RESUMEAI_API_URL` with the deployed extraction endpoint
+and optionally `RESUMEAI_API_KEY`. Without a reachable endpoint, resume upload
+must return 503 and the UI must retain the selected file while offering "Set Up
+Manually." Do not describe ResumeAI as live until a safe real upload returns 201,
+the profile review opens, and `GET /api/profile/{profile_id}` returns the mapped
+profile. Person C's root `services/resume_service.py` is not imported directly;
+its legacy model imports and `UploadFile`/async-mapper signatures require the
+active `app.services.resume_service` boundary.

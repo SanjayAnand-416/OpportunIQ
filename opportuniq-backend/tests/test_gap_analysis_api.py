@@ -38,6 +38,12 @@ def test_role_run_persists_and_gets_latest(client,monkeypatch):
     response=client.post("/api/gap-analysis/run",json={"profile_id":profile["profile_id"],"target_role":"ML"})
     assert response.status_code == 200
     assert client.get(f"/api/gap-analysis/{profile['profile_id']}").status_code == 200
+    by_id = client.get(f"/api/gap-analysis/analysis/{response.json()['id']}")
+    assert by_id.status_code == 200
+    assert by_id.json()["id"] == response.json()["id"]
+
+def test_analysis_id_lookup_returns_404(client):
+    assert client.get("/api/gap-analysis/analysis/missing").status_code == 404
 
 def test_opportunity_precedence_and_jd_ephemeral(client,monkeypatch):
     profile,opp=seed(); calls=[]

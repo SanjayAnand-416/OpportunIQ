@@ -23,6 +23,7 @@ REQUIRED_OPERATIONS = {
     ("patch", "/api/notifications/read-all"),
     ("get", "/api/notifications/scheduler/status"),
     ("post", "/api/gap-analysis/run"),
+    ("get", "/api/gap-analysis/analysis/{analysis_id}"),
 }
 
 

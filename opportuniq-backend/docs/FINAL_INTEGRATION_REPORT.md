@@ -229,3 +229,67 @@ python scripts/seed_demo.py --reset --print-summary
 The phase began with `opportuniq-backend/.DS_Store` already modified. It remains
 the only expected uncommitted path and was deliberately excluded from every
 commit.
+
+## Post-Teammate Reconciliation
+
+Revalidated on 2026-08-01 after the Gap Advisor frontend merge. This section
+supersedes earlier statements that the Gap Advisor page itself was missing.
+
+### Confirmed Changes
+
+- Added `GET /api/gap-analysis/analysis/{analysis_id}` so result-page lookup is
+  unambiguous and cannot collide with profile lookup.
+- Aligned `getGapAnalysis(analysisId)` with that explicit backend route.
+- Added source-to-OpenAPI frontend contract validation and extended the mocked
+  principal journey through analysis-ID retrieval.
+- Retained teammate root modules unchanged. None were activated because their
+  signatures/import boundaries do not match the canonical `app` contracts, and
+  the root Gap implementation performs raw SQLite access and import-time model
+  initialization.
+
+### Reconciled Service Status
+
+| Integration | Status | Evidence/fallback |
+|---|---|---|
+| FastAPI, SQLite, Gap result retrieval | LIVE_VERIFIED | local Uvicorn HTTP 200 |
+| JobSpy, reminder Groq, SMTP | MOCK_VERIFIED | focused/full tests; live flags disabled |
+| ResumeAI | CONTRACT_VERIFIED | active HTTP adapter, mocked contract, guarded 503 smoke |
+| Tavily, discovery Groq/ranker | BLOCKED_BY_TEAMMATE | no safe active-package adapter |
+| Gmail, Guardian, full Gap Agent | BLOCKED_BY_TEAMMATE | active modules absent/unsafe root Gap |
+| Gap Advisor frontend | CONTRACT_VERIFIED | lint, build, source/OpenAPI smoke |
+| Browser end-to-end behavior | DEFERRED | no browser test framework configured |
+
+### Validation Evidence
+
+- Backend: compile/import/database checks passed; `204 passed, 4 warnings`.
+- Contract checks: 39 HTTP operations across 33 paths and 13 frontend route
+  calls passed.
+- Frontend: ESLint passed; Vite production build passed with 1,974 modules.
+- Live-smoke default: Groq, Tavily, SMTP, ResumeAI, Gmail, Guardian, and full Gap
+  Agent all reported `SKIP`; no external provider call was made.
+- Local HTTP smoke: port 8000 was occupied, so Uvicorn ran on 8001 and
+  `GET /health` returned `200 {"status":"ok","service":"opportuniq-backend"}`.
+- `npm audit`: 3 high-severity React Router findings, 0 critical, fixes
+  available. Upgrade review remains deferred to avoid an unscoped dependency
+  change immediately before demo validation.
+
+The mixed/offline demo remains **FALLBACK_READY**. A full live demo remains
+**BLOCKED_BY_TEAMMATE** until active-package adapters, credentials, and observed
+opt-in smoke results exist. The pre-existing modified `.DS_Store` remains
+deliberately uncommitted.
+
+### ResumeAI Reconciliation
+
+Person C's `opportuniq-backend/services/resume_service.py` is an outbound HTTP
+client, not an in-repository ResumeAI server. Its `UploadFile` parameter, async
+legacy-model mapper, and top-level `models` import were incompatible with the
+active router contract. The new `app.services.resume_service` adapter preserves
+the multipart `file` request and mapping behavior while accepting bytes,
+enforcing the shared HTTP timeout, and returning active profile fields.
+
+Status is **CONTRACT_VERIFIED**, not live verified: 218 backend tests pass, 21
+frontend contract assertions pass, and a real local upload with the endpoint
+disabled returned the expected 503/manual fallback. Swagger and OpenAPI returned
+200; manual onboarding returned 201 and its subsequent profile GET returned 200.
+The remaining action is to provide a reachable `RESUMEAI_API_URL` and verify a
+safe real resume upload returns 201 without persisting the file.

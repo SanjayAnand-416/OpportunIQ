@@ -1,9 +1,4 @@
-"""Active-package adapter for the existing ResumeAI service.
-
-This module owns no ResumeAI or profile-mapping business logic.  It only
-adapts the active router's byte-oriented contract to the legacy Person C
-implementation and translates its return containers to active app schemas.
-"""
+"""Active-package adapter for the external ResumeAI HTTP service."""
 
 from __future__ import annotations
 
@@ -19,6 +14,8 @@ import httpx
 from app.config import EXTERNAL_HTTP_TIMEOUT_SECONDS
 from app.models import ResumeAIResponse, StudentProfile
 
+class ResumeAIResponseError(ResumeServiceError):
+    """Raised when ResumeAI returns an invalid response contract."""
 
 _T = TypeVar("_T")
 logger = logging.getLogger(__name__)
@@ -105,14 +102,21 @@ def map_resumeai_to_profile(
         "missing_fields": missing_fields,
     }
 
+    try:
+        payload = response.json()
+    except ValueError as exc:
+        raise ResumeAIResponseError("ResumeAI returned non-JSON content.") from exc
+    if not isinstance(payload, dict):
+        raise ResumeAIResponseError("ResumeAI returned an invalid JSON shape.")
 
-def _run_legacy_mapper(awaitable: Awaitable[_T]) -> _T:
-    """Run the legacy async mapper behind the active synchronous contract."""
-    def invoke() -> _T:
-        return asyncio.run(awaitable)
+    success = payload.get("success")
+    if success is False:
+        return ResumeAIResult(success=False, data=None, error="Extraction failed.")
 
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        return executor.submit(invoke).result()
+    data = _unwrap(payload)
+    if not isinstance(data, dict) or not data:
+        raise ResumeAIResponseError("ResumeAI response contains no profile data.")
+    return ResumeAIResult(success=True, data=data)
 
 
 def _person_c_resume() -> Any:

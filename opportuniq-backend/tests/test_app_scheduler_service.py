@@ -105,7 +105,15 @@ def test_fallback_persists_dashboard_and_is_idempotent(scheduler_db, monkeypatch
     async def failing_emit(*args, **kwargs):
         raise RuntimeError("socket closed")
 
+    async def failing_generate_reminder(**kwargs):
+        raise RuntimeError("Groq unavailable during fallback test")
+
     monkeypatch.setattr(scheduler_service, "emit_trace", failing_emit)
+    monkeypatch.setattr(
+        scheduler_service,
+        "generate_reminder",
+        failing_generate_reminder,
+    )
 
     async def scenario():
         profile, deadline = await _create_records()

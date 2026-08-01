@@ -374,4 +374,23 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS gap_analyses (
+                id TEXT PRIMARY KEY, profile_id TEXT NOT NULL, opportunity_id TEXT,
+                target_role TEXT NOT NULL, analysis_mode TEXT NOT NULL,
+                overall_assessment TEXT NOT NULL, missing_skills TEXT NOT NULL,
+                suggested_projects TEXT NOT NULL, evidence_data TEXT NOT NULL,
+                jd_snippet TEXT, profile_snapshot TEXT NOT NULL,
+                generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_gap_analyses_profile ON gap_analyses(profile_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_gap_analyses_opportunity ON gap_analyses(opportunity_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_gap_analyses_generated_at ON gap_analyses(generated_at)")
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_gap_role_profile ON gap_analyses(profile_id) WHERE opportunity_id IS NULL AND analysis_mode = 'profile_vs_role'")
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_gap_profile_opportunity ON gap_analyses(profile_id, opportunity_id) WHERE opportunity_id IS NOT NULL AND analysis_mode = 'profile_vs_opportunity'")
         await db.commit()

@@ -7,6 +7,7 @@ import {
   Target,
 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { getGapAnalyses, getGapAnalysisErrorMessage, runGapAnalysis } from '../api/gapAnalysis'
 import { getSavedOpportunities } from '../api/opportunities'
 import EmptyState from '../components/common/EmptyState'
@@ -36,6 +37,7 @@ const summaryCards = [
 ]
 
 export default function GapAnalysisPage() {
+  const navigate = useNavigate()
   const { profileId } = useAppContext()
   const [analyses, setAnalyses] = useState([])
   const [savedOpportunities, setSavedOpportunities] = useState([])
@@ -226,7 +228,7 @@ export default function GapAnalysisPage() {
                   key={analysis.id || analysis.title}
                   {...analysis}
                   onRetry={() => handleRetryAnalysis(analysis)}
-                  onViewAnalysis={() => setToastMessage('Detailed analysis view will be available in the next task.')}
+                  onViewAnalysis={() => navigate(`/dashboard/gap-analysis/${analysis.id}`)}
                 />
               ))}
             </div>
@@ -260,7 +262,7 @@ export default function GapAnalysisPage() {
                 key={analysis.id || analysis.title}
                 {...analysis}
                 onRetry={() => handleRetryAnalysis(analysis)}
-                onViewAnalysis={() => setToastMessage('Detailed analysis view will be available in the next task.')}
+                onViewAnalysis={() => navigate(`/dashboard/gap-analysis/${analysis.id}`)}
               />
             ))}
           </div>

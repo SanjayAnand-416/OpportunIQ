@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.database import init_db
 from app.routers.deadlines import router as deadlines_router
 from app.routers.gmail import router as gmail_router
+from app.routers.gap_analysis import router as gap_analysis_router
 from app.routers.notifications import router as notifications_router
 from app.routers.opportunities import router as opportunities_router
 from app.routers.profile import router as profile_router
@@ -65,6 +66,7 @@ app.include_router(deadlines_router)
 app.include_router(notifications_router)
 app.include_router(saved_router)
 app.include_router(settings_router)
+app.include_router(gap_analysis_router)
 
 
 @app.get("/health", tags=["System"])

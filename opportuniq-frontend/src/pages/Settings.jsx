@@ -12,7 +12,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { disconnectGmail, getGmailErrorMessage, getGmailStatus, GMAIL_CONNECT_URL } from '../api/gmail'
 import { getProfile, getProfileErrorMessage, updateProfile } from '../api/profile'
 import ErrorBanner from '../components/common/ErrorBanner'
+import ConfirmationDialog from '../components/common/ConfirmationDialog'
 import Toast from '../components/common/Toast'
+import SkeletonCard from '../components/common/SkeletonCard'
 import SettingCard from '../components/settings/SettingCard'
 import SectionHeader from '../components/settings/SectionHeader'
 import ToggleSwitch from '../components/settings/ToggleSwitch'
@@ -53,11 +55,7 @@ function SettingsSkeleton() {
   return (
     <div className="settings-grid" aria-label="Loading settings">
       {Array.from({ length: 5 }, (_, index) => (
-        <div className="settings-skeleton-card" key={index} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
+        <SkeletonCard key={index} lines={3} />
       ))}
     </div>
   )
@@ -76,6 +74,7 @@ export default function Settings() {
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [error, setError] = useState('')
   const [toast, setToast] = useState('')
+  const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
 
   const loadSettings = useCallback(async () => {
     if (!profileId) {
@@ -165,9 +164,9 @@ export default function Settings() {
   }
 
   function handleResetPreferences() {
-    if (!window.confirm('Reset local notification and reminder preferences?')) return
     setPreferences(resetLocalPreferences())
     setToast('Preferences reset.')
+    setIsResetDialogOpen(false)
   }
 
   const isProfileValid = validateProfile(profile)
@@ -386,7 +385,7 @@ export default function Settings() {
               <button
                 type="button"
                 className="settings-danger-btn"
-                onClick={handleResetPreferences}
+                onClick={() => setIsResetDialogOpen(true)}
                 aria-label="Reset local preferences"
               >
                 Reset Preferences
@@ -397,6 +396,15 @@ export default function Settings() {
       )}
 
       <Toast message={toast} />
+      <ConfirmationDialog
+        isOpen={isResetDialogOpen}
+        title="Reset Preferences"
+        message="Reset local notification and reminder preferences?"
+        confirmText="Reset Preferences"
+        confirmVariant="warning"
+        onCancel={() => setIsResetDialogOpen(false)}
+        onConfirm={handleResetPreferences}
+      />
     </section>
   )
 }

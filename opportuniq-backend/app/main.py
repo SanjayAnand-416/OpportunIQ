@@ -5,8 +5,11 @@ from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.requests import Request
+from fastapi.responses import JSONResponse
 
 from app.database import init_db
+from app.errors import IntegrationError, service_error_detail
 from app.routers.deadlines import router as deadlines_router
 from app.routers.gmail import router as gmail_router
 from app.routers.gap_analysis import router as gap_analysis_router
@@ -48,6 +51,19 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(IntegrationError)
+async def integration_error_handler(
+    _request: Request,
+    exc: IntegrationError,
+) -> JSONResponse:
+    """Return client-safe metadata for optional integration failures."""
+    logger.warning("Integration %s failed with %s", exc.service, exc.code)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": service_error_detail(exc)},
+    )
 
 frontend_url = os.getenv("FRONTEND_URL", "http://localhost:5173")
 

@@ -466,6 +466,59 @@ class CalendarEventResponse(BaseModel):
     deadline: DeadlineResponse
 
 
+class ReminderScheduleResult(BaseModel):
+    """Serializable outcome of scheduling reminders for one deadline."""
+
+    deadline_id: str
+    scheduled_jobs: list[str] = Field(default_factory=list)
+    skipped_offsets: list[str] = Field(default_factory=list)
+
+
+class ReminderExecutionResult(BaseModel):
+    """Serializable outcome of executing one reminder."""
+
+    success: bool
+    deadline_id: str
+    profile_id: str
+    reminder_offset: str
+    notification_id: str | None = None
+    subject: str | None = None
+    message: str | None = None
+    email_sent: bool = False
+    skipped: bool = False
+    reason: str | None = None
+
+
+class TestReminderRequest(BaseModel):
+    """Request to execute a deadline reminder immediately."""
+
+    deadline_id: str
+
+    @field_validator("deadline_id")
+    @classmethod
+    def validate_deadline_id(cls, value: str) -> str:
+        return _non_blank(value)
+
+
+class TestReminderResponse(BaseModel):
+    """Response from an immediate reminder execution."""
+
+    success: bool
+    deadline_id: str
+    notification_id: str | None = None
+    subject: str | None = None
+    message: str | None = None
+    email_sent: bool = False
+
+
+class SchedulerStatusResponse(BaseModel):
+    """Public scheduler diagnostics without callable internals."""
+
+    running: bool
+    job_count: int
+    jobs: list[dict] = Field(default_factory=list)
+
+
 class GmailScanRequest(BaseModel):
     """Request body for triggering a Gmail deadline scan."""
 

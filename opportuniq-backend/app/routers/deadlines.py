@@ -264,7 +264,9 @@ async def update_deadline(
     if "event_type" in updates:
         updates["event_type"] = _normalize_event_type(updates["event_type"])
     try:
-        updated_deadline = await deadline_repository.update_deadline(deadline_id, updates)
+        updated_deadline = await deadline_service.update_existing_deadline(
+            deadline_id, updates
+        )
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -281,7 +283,7 @@ async def update_deadline(
 @router.delete("/{deadline_id}", response_model=DeadlineDeleteResponse)
 async def delete_deadline(deadline_id: str) -> DeadlineDeleteResponse:
     """Delete one deadline."""
-    deleted = await deadline_repository.delete_deadline(deadline_id)
+    deleted = await deadline_service.delete_existing_deadline(deadline_id)
     if not deleted:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

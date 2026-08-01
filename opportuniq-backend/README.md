@@ -80,6 +80,16 @@ GET /api/notifications/scheduler/status
 
 `POST /api/notifications/test` accepts `{"deadline_id": "<DEADLINE_UUID>"}` and executes immediately without waiting for APScheduler. Repeated test reminders create separate dashboard notifications.
 
+## Saved Opportunities And Settings
+
+Saved tracker routes are `POST /api/saved/{opportunity_id}`, `GET /api/saved`, `PATCH /api/saved/{saved_id}`, and `DELETE /api/saved/{saved_id}`. Records include joined opportunity details and use canonical statuses: `Not Applied`, `Applied`, `Interview Scheduled`, `Offer Received`, and `Rejected`.
+
+`GET /api/opportunities/{opportunity_id}/skill-gap?profile_id=<UUID>` compares normalized skills, treating semantic similarity of at least `0.70` as a partial match. The sentence-transformer model is loaded lazily and reused.
+
+Reminder preferences are available through `GET` and `PUT /api/settings/notifications`. All four offsets default to enabled, and deadline scheduling respects `r_7d`, `r_3d`, `r_1d`, and `r_same_day`.
+
+Active reminder integrations expose canonical async contracts in `app.services.groq_service.generate_reminder` and `app.services.email_service.send_reminder_email`. Scheduler fallback text remains available when Groq or SMTP configuration is unavailable.
+
 ## Gmail OAuth
 
 Gmail integration uses read-only access:

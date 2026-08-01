@@ -18,6 +18,9 @@ import {
   updateOpportunityStatus,
 } from '../api/opportunities'
 import ErrorBanner from '../components/common/ErrorBanner'
+import ConfirmationDialog from '../components/common/ConfirmationDialog'
+import EmptyState from '../components/common/EmptyState'
+import SkeletonTable from '../components/common/SkeletonTable'
 import { ROUTES } from '../constants/routes'
 import { useAppContext } from '../contexts/AppContext'
 import {
@@ -157,20 +160,6 @@ function SavedMobileCard({ opportunity, onRemove, onStatusChange }) {
   )
 }
 
-function SavedSkeleton() {
-  return (
-    <div className="saved-skeleton-list" aria-label="Loading saved opportunities">
-      {Array.from({ length: 5 }, (_, index) => (
-        <div className="saved-skeleton-row" key={index} aria-hidden="true">
-          <span />
-          <span />
-          <span />
-        </div>
-      ))}
-    </div>
-  )
-}
-
 export default function SavedOpportunities() {
   const navigate = useNavigate()
   const { profileId } = useAppContext()
@@ -181,6 +170,7 @@ export default function SavedOpportunities() {
   const [typeFilter, setTypeFilter] = useState('All')
   const [statusFilter, setStatusFilter] = useState('All')
   const [sortBy, setSortBy] = useState('deadline')
+  const [pendingRemove, setPendingRemove] = useState(null)
 
   const loadSavedOpportunities = useCallback(async () => {
     setIsLoading(true)
@@ -228,14 +218,11 @@ export default function SavedOpportunities() {
     }
   }
 
-  async function handleRemove(opportunity) {
-    const confirmed = window.confirm(
-      `Remove "${opportunity.title}" from saved opportunities?`,
-    )
-    if (!confirmed) return
-
+  async function confirmRemove() {
+    if (!pendingRemove) return
     try {
-      await removeSavedOpportunity(opportunity.id)
+      await removeSavedOpportunity(pendingRemove.id)
+      setPendingRemove(null)
       await loadSavedOpportunities()
     } catch (requestError) {
       setError(getOpportunitiesErrorMessage(requestError))
@@ -335,7 +322,7 @@ export default function SavedOpportunities() {
       )}
 
       {isLoading ? (
-        <SavedSkeleton />
+        <SkeletonTable rows={5} columns={6} />
       ) : visibleOpportunities.length > 0 ? (
         <>
           <div className="saved-table-wrap">
@@ -355,7 +342,7 @@ export default function SavedOpportunities() {
                   <SavedTableRow
                     key={opportunity.id}
                     opportunity={opportunity}
-                    onRemove={handleRemove}
+                    onRemove={setPendingRemove}
                     onStatusChange={handleStatusChange}
                   />
                 ))}
@@ -367,34 +354,34 @@ export default function SavedOpportunities() {
               <SavedMobileCard
                 key={opportunity.id}
                 opportunity={opportunity}
-                onRemove={handleRemove}
+                onRemove={setPendingRemove}
                 onStatusChange={handleStatusChange}
               />
             ))}
           </div>
         </>
       ) : (
-        <div className="saved-empty">
-          <span aria-hidden="true">
-            <Building2 size={30} />
-          </span>
-          <h2>{hasSavedOpportunities ? 'No Matching Opportunities' : 'No Saved Opportunities'}</h2>
-          <p>
-            {hasSavedOpportunities
+        <EmptyState
+          Icon={Building2}
+          title={hasSavedOpportunities ? 'No Matching Opportunities' : 'No Saved Opportunities'}
+          subtitle={
+            hasSavedOpportunities
               ? 'Try changing your search, filters or sort option.'
-              : 'Save interesting opportunities from the dashboard to keep track of them here.'}
-          </p>
-          {!hasSavedOpportunities && (
-            <button
-              type="button"
-              onClick={() => navigate(ROUTES.DASHBOARD)}
-              aria-label="Explore opportunities"
-            >
-              Explore Opportunities
-            </button>
-          )}
-        </div>
+              : 'Save interesting opportunities from the dashboard to keep track of them here.'
+          }
+          primaryButton={hasSavedOpportunities ? undefined : 'Explore Opportunities'}
+          onPrimaryClick={() => navigate(ROUTES.DASHBOARD)}
+        />
       )}
+      <ConfirmationDialog
+        isOpen={Boolean(pendingRemove)}
+        title="Remove Opportunity"
+        message={`Remove "${pendingRemove?.title}" from saved opportunities?`}
+        confirmText="Remove"
+        confirmVariant="danger"
+        onCancel={() => setPendingRemove(null)}
+        onConfirm={confirmRemove}
+      />
     </section>
   )
 }

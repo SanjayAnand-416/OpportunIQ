@@ -6,6 +6,7 @@ free-form text. The Groq client is created lazily and reused across calls.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import date
@@ -28,6 +29,7 @@ DEFAULT_MODEL = "llama-3.3-70b-versatile"
 DEFAULT_TIMEOUT_SECONDS = 30.0
 DEFAULT_MAX_RETRIES = 3
 DEFAULT_TEMPERATURE = 0.0
+GAP_ANALYSIS_MODEL = "openai/gpt-oss-120b"
 
 # Guard against pathological inputs blowing the context window / token budget.
 MAX_INPUT_CHARS = 24_000
@@ -169,6 +171,98 @@ class ReminderMessage(BaseModel):
     body: str = Field(description="Reminder body, 3-6 short sentences, no placeholders.")
     call_to_action: str = Field(description="One imperative next step.")
     urgency: Urgency = Field(default=Urgency.MEDIUM, description="Urgency conveyed by the tone.")
+
+
+class JDSkillsExtraction(BaseModel):
+    """Skill categories extracted from a pasted job description."""
+
+    required_skills: list[str] = Field(
+        default_factory=list,
+        description="Skills explicitly required by the job description.",
+    )
+    preferred_skills: list[str] = Field(
+        default_factory=list,
+        description="Skills described as preferred, desirable, or nice to have.",
+    )
+    tech_stack: list[str] = Field(
+        default_factory=list,
+        description="Named languages, frameworks, tools, platforms, and databases.",
+    )
+
+    @field_validator("required_skills", "preferred_skills", "tech_stack")
+    @classmethod
+    def _normalize_skills(cls, values: list[str]) -> list[str]:
+        """Remove blank and duplicate model outputs while preserving order."""
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for value in values:
+            skill = value.strip()
+            key = skill.lower()
+            if skill and key not in seen:
+                normalized.append(skill)
+                seen.add(key)
+        return normalized
+
+
+class GapLearningResource(BaseModel):
+    """A concrete learning resource recommended for one deterministic gap."""
+
+    resource: str = Field(min_length=1, description="Name of the learning resource.")
+    url: str = Field(min_length=4, description="Real resource URL beginning with http.")
+
+    @field_validator("resource", "url", mode="before")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator("url")
+    @classmethod
+    def _require_http_url(cls, value: str) -> str:
+        if not value.startswith("http"):
+            raise ValueError("Learning resource URL must begin with http.")
+        return value
+
+
+class GapMissingSkill(BaseModel):
+    """LLM narrative attached to a deterministically identified gap."""
+
+    skill: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    learning_resources: list[GapLearningResource] = Field(min_length=1, max_length=5)
+
+    @field_validator("skill", "reason", mode="before")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class GapSuggestedProject(BaseModel):
+    """A practical project that addresses deterministic skill gaps."""
+
+    project_type: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    skills_addressed: list[str] = Field(min_length=1)
+
+    @field_validator("project_type", "description", mode="before")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class GapAnalysisLLMOutput(BaseModel):
+    """Validated narrative synthesis returned by the gap-analysis LLM."""
+
+    overall_assessment: str = Field(
+        min_length=20,
+        description="Two-to-three sentence assessment of readiness for the target role.",
+    )
+    missing_skills: list[GapMissingSkill] = Field(max_length=8)
+    suggested_projects: list[GapSuggestedProject] = Field(min_length=3, max_length=3)
+
+    @field_validator("overall_assessment", mode="before")
+    @classmethod
+    def _strip_assessment(cls, value: str) -> str:
+        return value.strip()
 
 
 async def extract_opportunity(
@@ -329,6 +423,136 @@ async def generate_reminder(
     )
 
 
+async def extract_jd_skills(job_description: str) -> dict:
+    """Extract required, preferred, and technology skills from a pasted JD.
+
+    Groq is called through Instructor with a dedicated Pydantic response model,
+    so callers always receive the three validated list fields required by the
+    deterministic gap-analysis pipeline.
+    """
+    description = _require_text(job_description, "job_description")[:3000]
+    system = (
+        "Extract skills from job descriptions for a deterministic gap-analysis "
+        "pipeline. Use only skills explicitly stated in the supplied description. "
+        "Classify mandatory skills as required_skills, desirable or nice-to-have "
+        "skills as preferred_skills, and named languages, frameworks, libraries, "
+        "tools, databases, and platforms as tech_stack. Do not infer or invent "
+        "skills. Return JSON only."
+    )
+
+    logger.info("Extracting JD skills from %d chars", len(description))
+    result = await _complete(
+        response_model=JDSkillsExtraction,
+        system_prompt=system,
+        user_prompt=(
+            "Extract skills from this job description into required_skills, "
+            f"preferred_skills, and tech_stack:\n\n{description}"
+        ),
+        operation="extract_jd_skills",
+        model_name=GAP_ANALYSIS_MODEL,
+    )
+    return result.model_dump()
+
+
+async def run_gap_analysis_llm(payload: dict) -> dict:
+    """Synthesize explanations, resources, projects, and an assessment.
+
+    The LLM receives only the gaps produced by deterministic scoring. Instructor
+    validates the JSON structure, after which this function rejects any skill
+    that was not present in the deterministic input.
+    """
+    if not isinstance(payload, dict):
+        raise GroqInputError("payload must be a dictionary.")
+
+    target_role = _require_text(payload.get("target_role"), "payload.target_role")
+    raw_gaps = payload.get("gaps")
+    if not isinstance(raw_gaps, list) or not raw_gaps:
+        raise GroqInputError("payload.gaps must be a non-empty list.")
+
+    # Retain only the deterministic fields produced by score_student_evidence;
+    # unrelated caller data is never forwarded to the model as a gap.
+    gaps: list[dict[str, Any]] = []
+    gap_keys: set[str] = set()
+    for gap in raw_gaps[:8]:
+        if not isinstance(gap, dict):
+            raise GroqInputError("Every payload.gaps item must be a dictionary.")
+        skill = _require_text(gap.get("skill"), "payload.gaps[].skill")
+        key = skill.lower()
+        if key in gap_keys:
+            continue
+        gaps.append(
+            {
+                "skill": skill,
+                "priority": gap.get("priority"),
+                "cluster": gap.get("cluster"),
+            }
+        )
+        gap_keys.add(key)
+
+    if not gaps:
+        raise GroqInputError("payload.gaps must contain at least one valid skill gap.")
+
+    student_skills = payload.get("student_skills", [])
+    if not isinstance(student_skills, list) or not all(
+        isinstance(skill, str) for skill in student_skills
+    ):
+        raise GroqInputError("payload.student_skills must be a list of strings.")
+
+    prompt = f"""You are a career advisor. A student's profile has been analysed against the role '{target_role}'.
+
+The following skill gaps were deterministically identified:
+{json.dumps(gaps, indent=2)}
+
+The student's current skills: {", ".join(student_skills)}
+
+Your task:
+1. For every gap skill, write a 1-2 sentence explanation of WHY this skill matters for {target_role}.
+2. Suggest exactly 3 projects the student can build to address multiple gaps. Be specific and practical.
+3. For every gap skill, suggest at least 1 real learning resource with a real URL that starts with http.
+4. Write a 2-3 sentence overall assessment of the student's readiness for {target_role}.
+
+IMPORTANT: Only address the skills listed in the deterministic gaps above. Do NOT add, infer, rename, or substitute any gap skill. Project skills_addressed must also contain only those exact gap skills. Return JSON only matching the requested schema."""
+
+    logger.info(
+        "Generating gap analysis for %s with %d deterministic gaps",
+        target_role,
+        len(gaps),
+    )
+    result = await _complete(
+        response_model=GapAnalysisLLMOutput,
+        system_prompt=(
+            "Follow the user's deterministic skill-gap list exactly. Never invent "
+            "additional skills. Produce only valid JSON conforming to the response schema."
+        ),
+        user_prompt=prompt,
+        operation="run_gap_analysis_llm",
+        model_name=GAP_ANALYSIS_MODEL,
+    )
+
+    # Instructor validates shape and cardinality. This second guard validates
+    # semantics: every input gap must be explained exactly once and projects may
+    # reference no skill outside that authoritative set.
+    returned_gap_keys = [item.skill.lower() for item in result.missing_skills]
+    if (
+        len(returned_gap_keys) != len(set(returned_gap_keys))
+        or set(returned_gap_keys) != gap_keys
+    ):
+        raise GroqExtractionError(
+            "run_gap_analysis_llm: response did not explain every deterministic gap exactly once."
+        )
+
+    if any(
+        skill.lower() not in gap_keys
+        for project in result.suggested_projects
+        for skill in project.skills_addressed
+    ):
+        raise GroqExtractionError(
+            "run_gap_analysis_llm: response invented a skill outside the deterministic gaps."
+        )
+
+    return result.model_dump()
+
+
 def get_client() -> instructor.AsyncInstructor:
     """Return the lazily created, process-wide async Groq client.
 
@@ -371,6 +595,7 @@ async def _complete(
     user_prompt: str,
     operation: str,
     temperature: float = DEFAULT_TEMPERATURE,
+    model_name: str | None = None,
 ) -> T:
     """Run one structured Groq completion and map failures to service errors.
 
@@ -380,6 +605,8 @@ async def _complete(
         user_prompt: The content to operate on.
         operation: Label used in logs.
         temperature: Sampling temperature; extraction defaults to deterministic.
+        model_name: Optional per-operation model override. Existing operations
+            continue to use the configured default when omitted.
 
     Returns:
         The validated ``response_model`` instance.
@@ -391,12 +618,12 @@ async def _complete(
         GroqExtractionError: Validation kept failing or Groq errored out.
     """
     client = get_client()
-    model = get_model()
+    selected_model = model_name or get_model()
     max_retries = _env_int(GROQ_MAX_RETRIES_ENV, DEFAULT_MAX_RETRIES)
 
     try:
         result: T = await client.chat.completions.create(
-            model=model,
+            model=selected_model,
             response_model=response_model,
             max_retries=max_retries,
             temperature=temperature,

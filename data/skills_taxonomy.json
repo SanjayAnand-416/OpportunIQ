@@ -1,0 +1,469 @@
+{
+  "role_patterns": {
+    "sde intern": [
+      "Python",
+      "Data Structures",
+      "Algorithms",
+      "Git",
+      "SQL",
+      "Problem Solving"
+    ],
+    "ml intern": [
+      "Python",
+      "Machine Learning",
+      "NumPy",
+      "Pandas",
+      "Scikit-learn",
+      "Statistics"
+    ],
+    "data analyst": [
+      "SQL",
+      "Python",
+      "Excel",
+      "Data Visualization",
+      "Statistics",
+      "Pandas"
+    ],
+    "frontend intern": [
+      "HTML",
+      "CSS",
+      "JavaScript",
+      "React",
+      "Git",
+      "Responsive Design"
+    ],
+    "backend intern": [
+      "Python",
+      "REST APIs",
+      "SQL",
+      "FastAPI",
+      "Git",
+      "Authentication"
+    ],
+    "full stack": [
+      "React",
+      "Node.js",
+      "SQL",
+      "REST APIs",
+      "Git",
+      "HTML",
+      "CSS"
+    ],
+    "devops": [
+      "Linux",
+      "Docker",
+      "CI/CD",
+      "Git",
+      "Cloud Platforms",
+      "Shell Scripting"
+    ],
+    "data engineer": [
+      "Python",
+      "SQL",
+      "ETL",
+      "Apache Spark",
+      "Cloud Platforms",
+      "Data Warehousing"
+    ],
+    "software engineer": [
+      "Data Structures",
+      "Algorithms",
+      "Object-Oriented Programming",
+      "Git",
+      "SQL",
+      "Software Testing",
+      "Problem Solving"
+    ],
+    "frontend engineer": [
+      "HTML",
+      "CSS",
+      "JavaScript",
+      "TypeScript",
+      "React",
+      "Responsive Design",
+      "Web Accessibility",
+      "Frontend Testing"
+    ],
+    "backend engineer": [
+      "Python",
+      "REST APIs",
+      "SQL",
+      "Database Design",
+      "Authentication",
+      "Caching",
+      "Microservices",
+      "Software Testing"
+    ],
+    "mobile developer": [
+      "Dart",
+      "Flutter",
+      "Mobile UI Design",
+      "REST APIs",
+      "State Management",
+      "Mobile Testing",
+      "Git"
+    ],
+    "android developer": [
+      "Kotlin",
+      "Android SDK",
+      "Jetpack Compose",
+      "REST APIs",
+      "Mobile UI Design",
+      "Mobile Testing",
+      "Git"
+    ],
+    "cloud engineer": [
+      "Linux",
+      "Cloud Platforms",
+      "Networking",
+      "Docker",
+      "Kubernetes",
+      "Terraform",
+      "Monitoring"
+    ],
+    "site reliability engineer": [
+      "Linux",
+      "Networking",
+      "Kubernetes",
+      "Infrastructure as Code",
+      "Monitoring",
+      "Observability",
+      "Incident Response"
+    ],
+    "qa engineer": [
+      "Software Testing",
+      "Test Automation",
+      "Selenium",
+      "API Testing",
+      "SQL",
+      "CI/CD",
+      "Git"
+    ],
+    "machine learning engineer": [
+      "Python",
+      "Machine Learning",
+      "Deep Learning",
+      "Scikit-learn",
+      "PyTorch",
+      "Feature Engineering",
+      "MLOps"
+    ],
+    "data scientist": [
+      "Python",
+      "SQL",
+      "Statistics",
+      "Pandas",
+      "Machine Learning",
+      "Data Visualization",
+      "Experiment Design"
+    ],
+    "security engineer": [
+      "Linux",
+      "Networking",
+      "Application Security",
+      "Threat Modeling",
+      "Identity and Access Management",
+      "Security Testing",
+      "Incident Response"
+    ],
+    "database administrator": [
+      "SQL",
+      "Database Design",
+      "PostgreSQL",
+      "Database Administration",
+      "Backup and Recovery",
+      "Performance Tuning",
+      "Linux"
+    ]
+  },
+  "skill_clusters": {
+    "Python": "Core Programming",
+    "Java": "Core Programming",
+    "Kotlin": "Core Programming",
+    "Dart": "Core Programming",
+    "JavaScript": "Core Programming",
+    "TypeScript": "Core Programming",
+    "Node.js": "Backend",
+    "Data Structures": "Core Programming",
+    "Algorithms": "Core Programming",
+    "Object-Oriented Programming": "Core Programming",
+    "Problem Solving": "Core Programming",
+    "Git": "Developer Tools",
+    "Linux": "Operating Systems",
+    "Shell Scripting": "Operating Systems",
+    "HTML": "Frontend",
+    "CSS": "Frontend",
+    "React": "Frontend",
+    "Responsive Design": "Frontend",
+    "Web Accessibility": "Frontend",
+    "Frontend Testing": "Quality Engineering",
+    "REST APIs": "Backend",
+    "FastAPI": "Backend",
+    "Authentication": "Security",
+    "Caching": "Backend",
+    "Microservices": "Software Architecture",
+    "SQL": "Data",
+    "PostgreSQL": "Data",
+    "Database Design": "Data",
+    "Database Administration": "Data",
+    "Backup and Recovery": "Data",
+    "Performance Tuning": "Data",
+    "Excel": "Data Analytics",
+    "Pandas": "Data Analytics",
+    "NumPy": "Data Analytics",
+    "Statistics": "Mathematics and Statistics",
+    "Data Visualization": "Data Analytics",
+    "Experiment Design": "Mathematics and Statistics",
+    "Machine Learning": "AI/ML",
+    "Scikit-learn": "AI/ML",
+    "Deep Learning": "AI/ML",
+    "PyTorch": "AI/ML",
+    "Natural Language Processing": "AI/ML",
+    "Feature Engineering": "AI/ML",
+    "MLOps": "AI/ML Operations",
+    "ETL": "Data Engineering",
+    "Apache Spark": "Data Engineering",
+    "Data Warehousing": "Data Engineering",
+    "Docker": "DevOps",
+    "CI/CD": "DevOps",
+    "Cloud Platforms": "Cloud",
+    "Kubernetes": "DevOps",
+    "Terraform": "Cloud",
+    "Infrastructure as Code": "Cloud",
+    "Networking": "Infrastructure",
+    "Monitoring": "Reliability Engineering",
+    "Observability": "Reliability Engineering",
+    "Incident Response": "Reliability Engineering",
+    "Software Testing": "Quality Engineering",
+    "Test Automation": "Quality Engineering",
+    "Selenium": "Quality Engineering",
+    "API Testing": "Quality Engineering",
+    "Android SDK": "Mobile",
+    "Jetpack Compose": "Mobile",
+    "Flutter": "Mobile",
+    "Mobile UI Design": "Mobile",
+    "State Management": "Application Architecture",
+    "Mobile Testing": "Quality Engineering",
+    "Application Security": "Security",
+    "Threat Modeling": "Security",
+    "Identity and Access Management": "Security",
+    "Security Testing": "Security",
+    "Communication": "Professional Skills"
+  },
+  "prerequisites": {
+    "Algorithms": [
+      "Data Structures",
+      "Problem Solving"
+    ],
+    "TypeScript": [
+      "JavaScript"
+    ],
+    "React": [
+      "HTML",
+      "CSS",
+      "JavaScript"
+    ],
+    "Frontend Testing": [
+      "JavaScript",
+      "Software Testing"
+    ],
+    "Node.js": [
+      "JavaScript"
+    ],
+    "FastAPI": [
+      "Python",
+      "REST APIs"
+    ],
+    "Authentication": [
+      "REST APIs"
+    ],
+    "Microservices": [
+      "REST APIs",
+      "Docker"
+    ],
+    "PostgreSQL": [
+      "SQL"
+    ],
+    "Database Administration": [
+      "SQL",
+      "Database Design"
+    ],
+    "Backup and Recovery": [
+      "Database Administration"
+    ],
+    "Performance Tuning": [
+      "SQL",
+      "Database Administration"
+    ],
+    "Pandas": [
+      "Python"
+    ],
+    "NumPy": [
+      "Python"
+    ],
+    "Data Visualization": [
+      "Statistics"
+    ],
+    "Machine Learning": [
+      "Python",
+      "NumPy",
+      "Statistics"
+    ],
+    "Scikit-learn": [
+      "Python",
+      "Machine Learning"
+    ],
+    "Deep Learning": [
+      "Machine Learning",
+      "Statistics"
+    ],
+    "PyTorch": [
+      "Python",
+      "Deep Learning"
+    ],
+    "Natural Language Processing": [
+      "Python",
+      "Machine Learning"
+    ],
+    "Feature Engineering": [
+      "Pandas",
+      "Statistics",
+      "Machine Learning"
+    ],
+    "MLOps": [
+      "Machine Learning",
+      "Docker",
+      "CI/CD"
+    ],
+    "ETL": [
+      "Python",
+      "SQL"
+    ],
+    "Apache Spark": [
+      "Python",
+      "SQL",
+      "ETL"
+    ],
+    "Data Warehousing": [
+      "SQL",
+      "ETL",
+      "Database Design"
+    ],
+    "Docker": [
+      "Linux"
+    ],
+    "CI/CD": [
+      "Git",
+      "Shell Scripting"
+    ],
+    "Kubernetes": [
+      "Docker",
+      "Networking"
+    ],
+    "Terraform": [
+      "Cloud Platforms",
+      "Networking"
+    ],
+    "Infrastructure as Code": [
+      "Cloud Platforms",
+      "Networking"
+    ],
+    "Observability": [
+      "Monitoring"
+    ],
+    "Incident Response": [
+      "Monitoring",
+      "Networking"
+    ],
+    "Test Automation": [
+      "Software Testing"
+    ],
+    "Selenium": [
+      "Test Automation"
+    ],
+    "API Testing": [
+      "REST APIs",
+      "Software Testing"
+    ],
+    "Android SDK": [
+      "Kotlin"
+    ],
+    "Jetpack Compose": [
+      "Kotlin",
+      "Android SDK"
+    ],
+    "Flutter": [
+      "Dart"
+    ],
+    "Mobile Testing": [
+      "Software Testing"
+    ],
+    "Application Security": [
+      "Networking",
+      "Authentication"
+    ],
+    "Threat Modeling": [
+      "Application Security"
+    ],
+    "Identity and Access Management": [
+      "Authentication"
+    ],
+    "Security Testing": [
+      "Software Testing",
+      "Application Security"
+    ]
+  },
+  "skill_synonyms": {
+    "js": "JavaScript",
+    "javascript programming": "JavaScript",
+    "ts": "TypeScript",
+    "node": "Node.js",
+    "nodejs": "Node.js",
+    "react.js": "React",
+    "reactjs": "React",
+    "html5": "HTML",
+    "css3": "CSS",
+    "dsa": "Data Structures",
+    "data structures and algorithms": "Data Structures",
+    "oop": "Object-Oriented Programming",
+    "version control": "Git",
+    "bash": "Shell Scripting",
+    "rest": "REST APIs",
+    "restful api": "REST APIs",
+    "postgres": "PostgreSQL",
+    "postgresql database": "PostgreSQL",
+    "dbms": "Database Design",
+    "ms excel": "Excel",
+    "python pandas": "Pandas",
+    "numpy library": "NumPy",
+    "data viz": "Data Visualization",
+    "ml": "Machine Learning",
+    "sklearn": "Scikit-learn",
+    "scikit learn": "Scikit-learn",
+    "dl": "Deep Learning",
+    "pytorch framework": "PyTorch",
+    "nlp": "Natural Language Processing",
+    "feature extraction": "Feature Engineering",
+    "ml ops": "MLOps",
+    "extract transform load": "ETL",
+    "spark": "Apache Spark",
+    "data warehouse": "Data Warehousing",
+    "continuous integration": "CI/CD",
+    "continuous delivery": "CI/CD",
+    "continuous deployment": "CI/CD",
+    "aws": "Cloud Platforms",
+    "azure": "Cloud Platforms",
+    "gcp": "Cloud Platforms",
+    "k8s": "Kubernetes",
+    "iac": "Infrastructure as Code",
+    "site monitoring": "Monitoring",
+    "automated testing": "Test Automation",
+    "selenium webdriver": "Selenium",
+    "api test automation": "API Testing",
+    "android": "Android SDK",
+    "jetpack": "Jetpack Compose",
+    "flutter sdk": "Flutter",
+    "appsec": "Application Security",
+    "iam": "Identity and Access Management"
+  }
+}

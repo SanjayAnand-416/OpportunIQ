@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useState } from 'react'
 import { disconnectGmail, getGmailConnectUrl, getGmailErrorMessage, getGmailStatus } from '../api/gmail'
 import { getProfile, getProfileErrorMessage, updateProfile } from '../api/profile'
+import { getReminderSettings, updateReminderSettings } from '../api/settings'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ConfirmationDialog from '../components/common/ConfirmationDialog'
 import Toast from '../components/common/Toast'
@@ -49,7 +50,12 @@ const NOTIFICATION_TOGGLES = [
   ['emailNotifications', 'Email Notifications'],
 ]
 
-const REMINDER_TIMINGS = ['1 Day Before', '2 Days Before', '3 Days Before', '1 Week Before']
+const REMINDER_TOGGLES = [
+  ['r_7d', '7 Days Before'],
+  ['r_3d', '3 Days Before'],
+  ['r_1d', '1 Day Before'],
+  ['r_same_day', 'Same Day'],
+]
 const TIMEZONES = ['Asia/Kolkata', 'UTC', 'America/New_York', 'Europe/London', 'Asia/Singapore']
 
 function SettingsSkeleton() {
@@ -66,6 +72,12 @@ export default function Settings() {
   const { profileId, reloadProfile } = useAppContext()
   const [profile, setProfile] = useState(normalizeProfile())
   const [gmailStatus, setGmailStatus] = useState(null)
+  const [reminderSettings, setReminderSettings] = useState({
+    r_7d: true,
+    r_3d: true,
+    r_1d: true,
+    r_same_day: true,
+  })
   const [preferences, setPreferences] = useLocalStorage(
     SETTINGS_STORAGE_KEY,
     getDefaultSettingsPreferences(),
@@ -87,12 +99,14 @@ export default function Settings() {
     setIsLoading(true)
     setError('')
     try {
-      const [profileData, gmailData] = await Promise.all([
+      const [profileData, gmailData, reminderData] = await Promise.all([
         getProfile(profileId),
         getGmailStatus(profileId),
+        getReminderSettings(profileId),
       ])
       setProfile(normalizeProfile(profileData.profile || profileData))
       setGmailStatus(gmailData)
+      setReminderSettings(reminderData)
     } catch (requestError) {
       setError(
         requestError?.config?.url?.includes('/gmail/')
@@ -120,6 +134,19 @@ export default function Settings() {
 
   function updateReminderPreference(key, value) {
     setPreferences((current) => ({ ...current, [key]: value }))
+  }
+
+  async function updateBackendReminder(key, value) {
+    const previous = reminderSettings
+    setReminderSettings((current) => ({ ...current, [key]: value }))
+    setError('')
+    try {
+      const updated = await updateReminderSettings(profileId, { [key]: value })
+      setReminderSettings(updated)
+    } catch (requestError) {
+      setReminderSettings(previous)
+      setError(getProfileErrorMessage(requestError))
+    }
   }
 
   function updateProfileField(fieldName, value) {
@@ -272,20 +299,15 @@ export default function Settings() {
             icon={Clock}
           >
             <div className="settings-field-stack">
-              <label className="settings-field" htmlFor="reminder-timing">
-                <span>Reminder Timing</span>
-                <select
-                  id="reminder-timing"
-                  value={preferences.reminderTiming}
-                  onChange={(event) =>
-                    updateReminderPreference('reminderTiming', event.target.value)
-                  }
-                >
-                  {REMINDER_TIMINGS.map((timing) => (
-                    <option key={timing}>{timing}</option>
-                  ))}
-                </select>
-              </label>
+              {REMINDER_TOGGLES.map(([key, label]) => (
+                <ToggleSwitch
+                  key={key}
+                  id={`reminder-${key}`}
+                  label={label}
+                  checked={reminderSettings[key]}
+                  onChange={(value) => updateBackendReminder(key, value)}
+                />
+              ))}
               <label className="settings-field" htmlFor="settings-timezone">
                 <span>Timezone</span>
                 <select

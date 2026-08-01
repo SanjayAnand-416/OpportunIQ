@@ -211,7 +211,7 @@ export default function SavedOpportunities() {
     )
 
     try {
-      await updateOpportunityStatus(opportunity.id, nextStatus)
+      await updateOpportunityStatus(opportunity.savedId, nextStatus)
     } catch (requestError) {
       setError(getOpportunitiesErrorMessage(requestError))
       setOpportunities(previousOpportunities)
@@ -221,7 +221,7 @@ export default function SavedOpportunities() {
   async function confirmRemove() {
     if (!pendingRemove) return
     try {
-      await removeSavedOpportunity(pendingRemove.id)
+      await removeSavedOpportunity(pendingRemove.savedId)
       setPendingRemove(null)
       await loadSavedOpportunities()
     } catch (requestError) {

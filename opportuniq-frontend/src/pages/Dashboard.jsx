@@ -5,6 +5,7 @@ import {
   getOpportunitiesByProfile,
   getOpportunitiesBySession,
   getOpportunitiesErrorMessage,
+  saveOpportunity,
   searchOpportunities,
 } from '../api/opportunities'
 import AgentTracePanel from '../components/dashboard/AgentTracePanel'
@@ -117,8 +118,14 @@ export default function Dashboard() {
     }
   }
 
-  function handleSave() {
-    setToastMessage('Coming Soon')
+  async function handleSave(opportunity) {
+    if (!profileId || !opportunity?.id) return
+    try {
+      await saveOpportunity(profileId, opportunity.id)
+      setToastMessage('Opportunity saved.')
+    } catch (error) {
+      setSearchError(getOpportunitiesErrorMessage(error))
+    }
   }
 
   function handleAddDeadline() {

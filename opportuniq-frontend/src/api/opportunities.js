@@ -25,26 +25,32 @@ export async function getOpportunitiesBySession(sessionId) {
 }
 
 export async function getSavedOpportunities(profileId) {
-  const response = await apiClient.get('/api/opportunities/saved', {
-    params: profileId ? { profile_id: profileId } : undefined,
+  const response = await apiClient.get('/api/saved', {
+    params: { profile_id: profileId },
   })
 
-  return response.data.opportunities ?? response.data.saved ?? response.data
+  return response.data.saved
 }
 
-export async function updateOpportunityStatus(opportunityId, status) {
+export async function saveOpportunity(profileId, opportunityId) {
+  const response = await apiClient.post(`/api/saved/${opportunityId}`, null, {
+    params: { profile_id: profileId },
+  })
+
+  return response.data
+}
+
+export async function updateOpportunityStatus(savedId, status) {
   const response = await apiClient.patch(
-    `/api/opportunities/${opportunityId}/status`,
+    `/api/saved/${savedId}`,
     { status },
   )
 
   return response.data
 }
 
-export async function removeSavedOpportunity(opportunityId) {
-  const response = await apiClient.delete(
-    `/api/opportunities/${opportunityId}/saved`,
-  )
+export async function removeSavedOpportunity(savedId) {
+  const response = await apiClient.delete(`/api/saved/${savedId}`)
 
   return response.data
 }

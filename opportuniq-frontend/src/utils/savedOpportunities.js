@@ -12,7 +12,13 @@ const TYPE_LABELS = {
   research: 'Research',
 }
 
-export const SAVED_STATUS_OPTIONS = ['Saved', 'Applied', 'Interview', 'Offer', 'Rejected']
+export const SAVED_STATUS_OPTIONS = [
+  'Not Applied',
+  'Applied',
+  'Interview Scheduled',
+  'Offer Received',
+  'Rejected',
+]
 
 export function normalizeSavedOpportunity(raw) {
   const opportunity = normalizeOpportunity(raw.opportunity ?? raw)
@@ -34,10 +40,10 @@ export function normalizeSavedOpportunities(rawList) {
 export function normalizeSavedStatus(status) {
   const normalized = String(status || '').trim().toLowerCase()
   if (normalized === 'applied') return 'Applied'
-  if (normalized === 'interview' || normalized === 'interview scheduled') return 'Interview'
-  if (normalized === 'offer' || normalized === 'offer received') return 'Offer'
+  if (normalized === 'interview' || normalized === 'interview scheduled') return 'Interview Scheduled'
+  if (normalized === 'offer' || normalized === 'offer received') return 'Offer Received'
   if (normalized === 'rejected') return 'Rejected'
-  return 'Saved'
+  return 'Not Applied'
 }
 
 export function getOpportunityType(opportunity) {
@@ -49,8 +55,8 @@ export function calculateStatistics(opportunities) {
   return {
     saved: opportunities.length,
     applied: opportunities.filter((item) => item.status === 'Applied').length,
-    interview: opportunities.filter((item) => item.status === 'Interview').length,
-    offer: opportunities.filter((item) => item.status === 'Offer').length,
+    interview: opportunities.filter((item) => item.status === 'Interview Scheduled').length,
+    offer: opportunities.filter((item) => item.status === 'Offer Received').length,
   }
 }
 

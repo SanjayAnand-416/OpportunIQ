@@ -1,7 +1,6 @@
 """UTC reminder-time calculations and scheduler orchestration."""
 
 import asyncio
-import importlib
 import inspect
 import logging
 import uuid
@@ -21,6 +20,8 @@ from app.repositories import (
     profile_repository,
 )
 from app.websocket_manager import emit_trace
+from app.services.email_service import send_reminder_email
+from app.services.groq_service import generate_reminder
 
 
 logger = logging.getLogger(__name__)
@@ -152,15 +153,8 @@ async def _invoke_optional(function: Any, **kwargs: Any) -> Any:
     return result
 
 
-def _optional_function(module_names: tuple[str, ...], function_name: str) -> Any | None:
-    for module_name in module_names:
-        try:
-            module = importlib.import_module(module_name)
-        except (ImportError, ModuleNotFoundError):
-            continue
-        function = getattr(module, function_name, None)
-        if callable(function):
-            return function
+def _optional_function(*args: Any) -> None:
+    """Deprecated test seam retained for compatibility with existing fixtures."""
     return None
 
 
@@ -191,27 +185,14 @@ async def _generate_reminder_content(
     days_remaining: int | None,
 ) -> tuple[str, str]:
     """Generate reminder content through a compatible adapter or local fallback."""
-    function = _optional_function(
-        ("app.services.groq_service", "services.groq_service"),
-        "generate_reminder",
-    )
-    if function is not None:
-        expected = {
-            "profile_name",
-            "skills",
-            "deadline_title",
-            "deadline_dt",
-            "days_left",
-        }
-        if expected.issubset(inspect.signature(function).parameters):
-            try:
+    try:
                 result = await _invoke_optional(
-                    function,
+                    generate_reminder,
                     profile_name=str(profile.get("name") or "Student"),
                     skills=list(profile.get("skills") or []),
                     deadline_title=str(deadline.get("title") or "Deadline"),
-                    deadline_dt=str(deadline.get("deadline_datetime") or ""),
-                    days_left=days_remaining or 0,
+                    deadline_datetime=str(deadline.get("deadline_datetime") or ""),
+                    days_left=days_remaining,
                 )
                 if hasattr(result, "model_dump"):
                     result = result.model_dump()
@@ -220,8 +201,8 @@ async def _generate_reminder_content(
                     body = result.get("body") or result.get("message")
                     if subject and body:
                         return str(subject), str(body)
-            except Exception as exc:
-                logger.warning("Groq reminder generation failed: %s", exc)
+    except Exception as exc:
+        logger.warning("Groq reminder generation failed: %s", type(exc).__name__)
     return _fallback_reminder_content(deadline, days_remaining)
 
 
@@ -231,15 +212,9 @@ async def _send_email_if_available(
     email = str(profile.get("email") or "").strip()
     if not email:
         return False
-    function = _optional_function(
-        ("app.services.email_service", "services.email_service"),
-        "send_reminder_email",
-    )
-    if function is None:
-        return False
     try:
         result = await _invoke_optional(
-            function,
+            send_reminder_email,
             to_email=email,
             subject=subject,
             body=body,

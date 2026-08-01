@@ -90,6 +90,14 @@ Reminder preferences are available through `GET` and `PUT /api/settings/notifica
 
 Active reminder integrations expose canonical async contracts in `app.services.groq_service.generate_reminder` and `app.services.email_service.send_reminder_email`. Scheduler fallback text remains available when Groq or SMTP configuration is unavailable.
 
+## Gap Analysis
+
+The Gap Advisor supports profile-versus-role, pasted-JD, and profile-versus-opportunity analysis through `POST /api/gap-analysis/run`. When multiple inputs are supplied, precedence is opportunity, then job description, then target role. Role and opportunity analyses are persisted; pasted-JD analyses are ephemeral and only a 300-character snippet may appear in the response.
+
+Retrieve persisted results with `GET /api/gap-analysis/{profile_id}` or `GET /api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}`. Results older than seven days are marked stale dynamically. Execution emits buffered `gap-analysis` running, complete, and error events using the request `session_id` or a generated UUID.
+
+Execution depends on a teammate-owned `run(...)` implementation in `app.agents.gap_analysis_agent` or `app.services.gap_analysis_service`; the POST endpoint returns HTTP 503 while neither exists. Retrieval remains available independently. This feature is separate from the lightweight `/api/opportunities/{opportunity_id}/skill-gap` comparison.
+
 ## Gmail OAuth
 
 Gmail integration uses read-only access:

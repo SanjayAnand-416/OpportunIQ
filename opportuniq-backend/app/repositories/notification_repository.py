@@ -207,3 +207,64 @@ async def update_delivery_status(
     if not updated:
         return None
     return await get_notification_by_id(notification_id)
+
+
+async def list_notifications(
+    profile_id: str,
+    unread_only: bool = False,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """List a profile's notifications newest first."""
+    where = "profile_id = ?"
+    values: list[Any] = [_required_text(profile_id, "profile_id")]
+    if unread_only:
+        where += " AND COALESCE(is_read, 0) = 0"
+    values.append(max(1, min(int(limit), 100)))
+    async with get_db() as db:
+        cursor = await db.execute(
+            f"""
+            SELECT {', '.join(NOTIFICATION_COLUMNS)}
+            FROM notifications
+            WHERE {where}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?
+            """,
+            values,
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+    return [
+        item for row in rows if (item := row_to_notification(row)) is not None
+    ]
+
+
+async def mark_notification_read(notification_id: str) -> dict[str, Any] | None:
+    """Mark one notification read and return it."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            "UPDATE notifications SET is_read = 1 WHERE id = ?",
+            (_required_text(notification_id, "notification_id"),),
+        )
+        await db.commit()
+        updated = cursor.rowcount
+        await cursor.close()
+    if not updated:
+        return None
+    return await get_notification_by_id(notification_id)
+
+
+async def mark_all_notifications_read(profile_id: str) -> int:
+    """Mark every notification for a profile read and return changed count."""
+    async with get_db() as db:
+        cursor = await db.execute(
+            """
+            UPDATE notifications
+            SET is_read = 1
+            WHERE profile_id = ? AND COALESCE(is_read, 0) = 0
+            """,
+            (_required_text(profile_id, "profile_id"),),
+        )
+        await db.commit()
+        updated = cursor.rowcount
+        await cursor.close()
+    return int(updated or 0)

@@ -1,5 +1,13 @@
 import apiClient from './client'
 
+export async function getNotifications(profileId) {
+  const response = await apiClient.get('/api/notifications', {
+    params: profileId ? { profile_id: profileId } : undefined,
+  })
+
+  return response.data
+}
+
 export async function getUnreadNotifications(profileId) {
   const response = await apiClient.get('/api/notifications', {
     params: {

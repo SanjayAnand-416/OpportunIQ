@@ -32,9 +32,13 @@ export function sortNotifications(notifications) {
 }
 
 export function normalizeNotification(notification) {
+  const message = notification.message || notification.body || notification.subject || ''
+  const type = notification.type || notification.category || getNotificationType({ message })
+
   return {
     id: notification.id || notification.notification_id,
-    message: notification.message || notification.body || notification.subject || '',
+    message,
+    type: normalizeNotificationType(type),
     timestamp:
       notification.timestamp ||
       notification.created_at ||
@@ -75,11 +79,61 @@ export function notificationFromSocketPayload(payload) {
 }
 
 export function getNotificationIcon(notification) {
-  const message = notification.message.toLowerCase()
+  const type = getNotificationType(notification)
 
-  if (message.includes('deadline') || message.includes('reminder')) {
-    return 'deadline'
-  }
+  if (type === 'Reminder') return 'reminder'
+  if (type === 'Deadline') return 'deadline'
+  if (type === 'Interview') return 'interview'
+  if (type === 'Offer') return 'offer'
+  if (type === 'Hackathon') return 'hackathon'
+  if (type === 'System') return 'system'
 
   return 'notification'
+}
+
+export function normalizeNotificationType(type) {
+  const normalized = String(type || '').trim().toLowerCase()
+
+  if (normalized === 'reminder') return 'Reminder'
+  if (normalized === 'deadline') return 'Deadline'
+  if (normalized === 'interview') return 'Interview'
+  if (normalized === 'offer') return 'Offer'
+  if (normalized === 'hackathon') return 'Hackathon'
+  if (normalized === 'system') return 'System'
+
+  return ''
+}
+
+export function getNotificationType(notification) {
+  if (notification.type) {
+    const normalized = normalizeNotificationType(notification.type)
+    if (normalized) return normalized
+  }
+
+  const message = String(notification.message || '').toLowerCase()
+
+  if (message.includes('interview')) return 'Interview'
+  if (message.includes('offer')) return 'Offer'
+  if (message.includes('hackathon')) return 'Hackathon'
+  if (message.includes('deadline')) return 'Deadline'
+  if (message.includes('reminder')) return 'Reminder'
+  if (message.includes('system')) return 'System'
+
+  return 'System'
+}
+
+export function filterNotifications(notifications, { query, type, tab }) {
+  const normalizedQuery = query.trim().toLowerCase()
+
+  return notifications.filter((notification) => {
+    const notificationType = getNotificationType(notification)
+    const matchesTab = tab === 'all' || !notification.read
+    const matchesType = type === 'All' || notificationType === type
+    const matchesQuery =
+      !normalizedQuery ||
+      notification.message.toLowerCase().includes(normalizedQuery) ||
+      notificationType.toLowerCase().includes(normalizedQuery)
+
+    return matchesTab && matchesType && matchesQuery
+  })
 }

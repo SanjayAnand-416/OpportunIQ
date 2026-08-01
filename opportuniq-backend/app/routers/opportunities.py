@@ -16,6 +16,8 @@ from app.models import (
     OpportunitySearchRequest,
     OpportunitySearchResponse,
 )
+from app.models import SkillGapResponse
+from app.services.skill_gap_service import calculate_skill_gap
 from app.repositories.opportunity_repository import (
     delete_opportunities_by_session,
     get_cached_discovery,
@@ -35,6 +37,22 @@ router = APIRouter(
     prefix="/api/opportunities",
     tags=["Opportunities"],
 )
+
+
+@router.get("/{opportunity_id}/skill-gap", response_model=SkillGapResponse)
+async def opportunity_skill_gap(opportunity_id: str, profile_id: str = Query(...)):
+    opportunity = await get_opportunity_by_id(opportunity_id)
+    if opportunity is None:
+        raise HTTPException(status_code=404, detail="Opportunity not found")
+    profile = await get_profile_by_id(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=404, detail="Profile not found")
+    try:
+        result = await calculate_skill_gap(opportunity=opportunity, profile=profile)
+    except (ImportError, OSError, RuntimeError) as exc:
+        logger.warning("Skill-gap model unavailable: %s", exc)
+        raise HTTPException(status_code=503, detail="Skill-gap analysis is unavailable.") from exc
+    return SkillGapResponse(opportunity_id=opportunity_id, profile_id=profile_id, **result)
 
 MAX_EXTRACTION_INPUT_CHARS = 3000
 MAX_EXTRACTION_RESULTS = 40

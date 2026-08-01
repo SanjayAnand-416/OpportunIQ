@@ -6,7 +6,7 @@ export async function getGapAnalyses(profileId) {
 }
 
 export async function getGapAnalysis(analysisId) {
-  const response = await apiClient.get(`/api/gap-analysis/${analysisId}`)
+  const response = await apiClient.get(`/api/gap-analysis/analysis/${analysisId}`)
   return response.data
 }
 

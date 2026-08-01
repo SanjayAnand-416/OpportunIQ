@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom'
+import AppLayout from './components/layout/AppLayout'
 import { ROUTES } from './constants/routes'
 import Dashboard from './pages/Dashboard'
 import DeadlineCalendar from './pages/DeadlineCalendar'
@@ -17,11 +18,13 @@ function App() {
       <Route path={ROUTES.UPLOAD} element={<ResumeUpload />} />
       <Route path={ROUTES.MANUAL} element={<ManualForm />} />
       <Route path={ROUTES.PROFILE_REVIEW} element={<ProfileReview />} />
-      <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
-      <Route path={ROUTES.DEADLINES} element={<DeadlineCalendar />} />
-      <Route path={ROUTES.SAVED} element={<SavedOpportunities />} />
-      <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
-      <Route path={ROUTES.SETTINGS} element={<Settings />} />
+      <Route element={<AppLayout />}>
+        <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+        <Route path={ROUTES.DEADLINES} element={<DeadlineCalendar />} />
+        <Route path={ROUTES.SAVED} element={<SavedOpportunities />} />
+        <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
+        <Route path={ROUTES.SETTINGS} element={<Settings />} />
+      </Route>
     </Routes>
   )
 }

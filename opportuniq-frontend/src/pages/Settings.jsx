@@ -1,4 +1,3 @@
 export default function Settings() {
-  return <h1>Settings Page</h1>
+  return <p className="page-placeholder">Settings are coming next.</p>
 }
-

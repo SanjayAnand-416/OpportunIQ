@@ -137,10 +137,33 @@ def _resolve_service_function(module_name: str, function_name: str) -> Callable[
     return getattr(module, function_name, None)
 
 
-async def _call_maybe_async(function: Callable[..., Any], *args: Any, timeout: float = 20.0) -> Any:
+async def _call_maybe_async(
+    function: Callable[..., Any],
+    *args: Any,
+    timeout: float = 20.0,
+    **kwargs: Any,
+) -> Any:
     if inspect.iscoroutinefunction(function):
-        return await asyncio.wait_for(function(*args), timeout=timeout)
-    return await asyncio.wait_for(asyncio.to_thread(function, *args), timeout=timeout)
+        return await asyncio.wait_for(function(*args, **kwargs), timeout=timeout)
+    return await asyncio.wait_for(
+        asyncio.to_thread(function, *args, **kwargs),
+        timeout=timeout,
+    )
+
+
+def _accepts_keyword(function: Callable[..., Any], keyword: str) -> bool:
+    """Return whether a dynamic adapter accepts a keyword or arbitrary kwargs."""
+    parameters = inspect.signature(function).parameters
+    return keyword in parameters or any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+
+
+def _append_unique_error(errors: list[str], message: str) -> None:
+    """Append one safe provider error without duplicating trace metadata."""
+    if message not in errors:
+        errors.append(message)
 
 
 def _unique_strings(values: Any) -> list[str]:
@@ -212,7 +235,9 @@ async def run_discovery_pipeline(
 
     target_roles = _unique_strings(profile.get("target_roles"))
     student_skills = _as_list(profile.get("skills"))
-    location = str(profile.get("location") or "India").strip() or "India"
+    location = str(
+        profile.get("preferred_location") or profile.get("location") or "India"
+    ).strip() or "India"
     opportunity_type = profile.get("opportunity_type")
     profile_id = str(profile.get("profile_id") or "").strip()
     if not profile_id or not target_roles:
@@ -247,17 +272,40 @@ async def run_discovery_pipeline(
     tavily_search = _resolve_service_function("tavily_service", "search_hackathons_and_portals")
     tavily_count = 0
     if tavily_search is None:
-        errors.append("Tavily service unavailable.")
+        _append_unique_error(errors, "Tavily service unavailable.")
     else:
         for role in target_roles:
             try:
-                tavily_results = await _call_maybe_async(tavily_search, role, student_skills)
+                tavily_kwargs = {"location": location} if _accepts_keyword(
+                    tavily_search, "location"
+                ) else {}
+                tavily_results = await _call_maybe_async(
+                    tavily_search,
+                    role,
+                    student_skills,
+                    **tavily_kwargs,
+                )
                 if isinstance(tavily_results, list):
                     raw_results.extend(tavily_results)
                     tavily_count += len(tavily_results)
+                    if not tavily_results:
+                        _append_unique_error(
+                            errors,
+                            f"Tavily returned no search results for {role}.",
+                        )
             except Exception as exc:
-                logger.warning("Tavily search failed: %s", exc)
-                errors.append(f"Tavily search failed for {role}.")
+                failure_code = getattr(exc, "code", "provider_error")
+                logger.warning("Tavily search failed with %s", failure_code)
+                if failure_code == "credential_failure":
+                    _append_unique_error(errors, "Tavily credential failure.")
+                    break
+                if failure_code == "timeout":
+                    message = f"Tavily request timed out for {role}."
+                elif failure_code == "network_failure":
+                    message = f"Tavily network failure for {role}."
+                else:
+                    message = f"Tavily provider failure for {role}."
+                _append_unique_error(errors, message)
     await emit_trace(
         session_id,
         "tavily",
@@ -325,17 +373,33 @@ async def run_discovery_pipeline(
         if _is_expired(opportunity.get("deadline")):
             continue
         try:
-            combined = (
+            score_result = (
                 await _call_maybe_async(score, opportunity, student_skills, timeout=10.0)
                 if score is not None
                 else _fallback_score(opportunity, student_skills)
             )
+            if isinstance(score_result, Mapping):
+                combined = score_result.get("final_score", 0.0)
+                opportunity["semantic_score"] = _clamp_score(
+                    score_result.get("semantic_score", score_result.get("skill_score", 0.0))
+                )
+                opportunity["skill_score"] = _clamp_score(
+                    score_result.get("skill_score", opportunity["semantic_score"])
+                )
+                opportunity["urgency_score"] = _clamp_score(
+                    score_result.get("urgency_score", 0.0)
+                )
+                opportunity["deadline_score"] = _clamp_score(
+                    score_result.get("deadline_score", opportunity["urgency_score"])
+                )
+            else:
+                combined = score_result
         except Exception as exc:
             logger.warning("Opportunity scoring failed: %s", exc)
             combined = _fallback_score(opportunity, student_skills)
             errors.append("One opportunity score failed; used fallback.")
         match_score = _clamp_score(opportunity.get("match_score", combined))
-        urgency_score = _clamp_score(opportunity.get("urgency_score", 0.5))
+        urgency_score = _clamp_score(opportunity.get("urgency_score", 0.0))
         opportunity["match_score"] = match_score
         opportunity["urgency_score"] = urgency_score
         opportunity["combined_score"] = _clamp_score(combined)

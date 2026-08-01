@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from app import database
 from app.main import app
 from app.models import StudentProfile
-from app.repositories import opportunity_repository, profile_repository
+from app.repositories import gap_analysis_repository, opportunity_repository, profile_repository
 from app.routers import gap_analysis
 
 @pytest.fixture()
@@ -31,7 +31,9 @@ def test_agent_unavailable_is_503(client,monkeypatch):
 
 def test_role_run_persists_and_gets_latest(client,monkeypatch):
     profile,_=seed()
-    async def run(**kwargs): return result(profile["profile_id"])
+    async def run(**kwargs):
+        value=result(profile["profile_id"])
+        return await gap_analysis_repository.save_gap_analysis(value, persist=True)
     monkeypatch.setattr(gap_analysis,"_load_gap_analysis_agent",lambda:run)
     response=client.post("/api/gap-analysis/run",json={"profile_id":profile["profile_id"],"target_role":"ML"})
     assert response.status_code == 200
@@ -41,7 +43,11 @@ def test_opportunity_precedence_and_jd_ephemeral(client,monkeypatch):
     profile,opp=seed(); calls=[]
     async def run(**kwargs):
         calls.append(kwargs); mode="profile_vs_opportunity" if kwargs.get("opportunity_id") else "profile_vs_jd"
-        return result(profile["profile_id"],mode,kwargs.get("opportunity_id"))
+        value=result(profile["profile_id"],mode,kwargs.get("opportunity_id"))
+        return await gap_analysis_repository.save_gap_analysis(
+            value,
+            persist=mode != "profile_vs_jd",
+        )
     monkeypatch.setattr(gap_analysis,"_load_gap_analysis_agent",lambda:run)
     payload={"profile_id":profile["profile_id"],"opportunity_id":opp["opportunity_id"],"job_description":"x"*60,"target_role":"Role"}
     response=client.post("/api/gap-analysis/run",json=payload)

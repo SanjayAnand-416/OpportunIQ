@@ -1,4 +1,3 @@
 export default function SavedOpportunities() {
-  return <h1>Saved Opportunities Page</h1>
+  return <p className="page-placeholder">Saved opportunities will appear here.</p>
 }
-

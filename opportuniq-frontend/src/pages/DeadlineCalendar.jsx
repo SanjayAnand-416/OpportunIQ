@@ -1,4 +1,3 @@
 export default function DeadlineCalendar() {
-  return <h1>Deadline Calendar Page</h1>
+  return <p className="page-placeholder">The deadline calendar is coming next.</p>
 }
-

@@ -1,4 +1,3 @@
-export default function PageContainer() {
-  return <div>Page Container</div>
+export default function PageContainer({ children }) {
+  return <div className="page-container">{children}</div>
 }
-

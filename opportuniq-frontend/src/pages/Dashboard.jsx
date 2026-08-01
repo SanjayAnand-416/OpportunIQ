@@ -1,4 +1,3 @@
 export default function Dashboard() {
-  return <h1>Dashboard Page</h1>
+  return <p className="page-placeholder">Opportunity discovery is coming next.</p>
 }
-

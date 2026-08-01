@@ -8,7 +8,7 @@ function usePageTitle() {
   return activeItem?.title ?? 'Dashboard'
 }
 
-export default function DashboardNavbar({ onMenuClick }) {
+export default function DashboardNavbar({ onMenuClick, searchQuery, onSearchQueryChange }) {
   const title = usePageTitle()
 
   return (
@@ -37,6 +37,8 @@ export default function DashboardNavbar({ onMenuClick }) {
             type="search"
             className="dash-search-input"
             placeholder="Search opportunities..."
+            value={searchQuery}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
           />
         </div>
 

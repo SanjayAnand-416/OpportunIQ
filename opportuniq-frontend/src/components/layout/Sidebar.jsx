@@ -3,12 +3,14 @@ import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { NAV_ITEMS } from '../../constants/navigation'
 import { ROUTES } from '../../constants/routes'
+import { useAppContext } from '../../contexts/AppContext'
 import SidebarItem from './SidebarItem'
 
-const STUDENT_NAME = 'Alex Johnson'
-const STUDENT_EMAIL = 'alex.johnson@example.edu'
+const FALLBACK_NAME = 'Student'
+const FALLBACK_EMAIL = 'Complete your profile'
 
 function getInitials(name) {
+  if (!name) return '?'
   return name
     .split(' ')
     .map((part) => part[0])
@@ -19,6 +21,10 @@ function getInitials(name) {
 
 export default function Sidebar({ isOpen, onClose }) {
   const closeButtonRef = useRef(null)
+  const { profile, isProfileLoading } = useAppContext()
+
+  const studentName = profile?.name || (isProfileLoading ? 'Loading…' : FALLBACK_NAME)
+  const studentEmail = profile?.email || (isProfileLoading ? '' : FALLBACK_EMAIL)
 
   useEffect(() => {
     if (!isOpen) return undefined
@@ -84,11 +90,11 @@ export default function Sidebar({ isOpen, onClose }) {
         <div className="sidebar-footer">
           <div className="sidebar-user">
             <span className="sidebar-user-avatar" aria-hidden="true">
-              {getInitials(STUDENT_NAME)}
+              {getInitials(profile?.name)}
             </span>
             <span className="sidebar-user-info">
-              <span className="sidebar-user-name">{STUDENT_NAME}</span>
-              <span className="sidebar-user-email">{STUDENT_EMAIL}</span>
+              <span className="sidebar-user-name">{studentName}</span>
+              <span className="sidebar-user-email">{studentEmail}</span>
             </span>
           </div>
         </div>

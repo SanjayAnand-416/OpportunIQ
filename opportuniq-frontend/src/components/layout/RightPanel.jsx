@@ -1,16 +1,18 @@
-import { CalendarClock, Mail } from 'lucide-react'
-import RightPanelCard from './RightPanelCard'
+import { useAppContext } from '../../contexts/AppContext'
+import DeadlineMiniCalendar from '../dashboard/DeadlineMiniCalendar'
+import GmailConnectCard from '../dashboard/GmailConnectCard'
 
 export default function RightPanel() {
+  const { profileId } = useAppContext()
+
+  if (!profileId) {
+    return null
+  }
+
   return (
     <aside className="right-panel" aria-label="Utility panel">
-      <RightPanelCard title="Gmail Integration" icon={Mail}>
-        <p className="right-panel-placeholder">Component Coming Next</p>
-      </RightPanelCard>
-
-      <RightPanelCard title="Upcoming Deadlines" icon={CalendarClock}>
-        <p className="right-panel-placeholder">Component Coming Next</p>
-      </RightPanelCard>
+      <GmailConnectCard profileId={profileId} />
+      <DeadlineMiniCalendar profileId={profileId} />
     </aside>
   )
 }

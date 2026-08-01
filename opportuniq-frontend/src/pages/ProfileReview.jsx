@@ -11,6 +11,7 @@ import ErrorBanner from '../components/common/ErrorBanner'
 import ProfileReviewForm from '../components/onboarding/ProfileReviewForm'
 import ProfileSummaryCard from '../components/onboarding/ProfileSummaryCard'
 import { ROUTES } from '../constants/routes'
+import { useAppContext } from '../contexts/AppContext'
 import {
   isProfileComplete,
   normalizeProfile,
@@ -21,6 +22,7 @@ export default function ProfileReview() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const profileId = searchParams.get('profile_id')
+  const { setProfileId } = useAppContext()
   const [profile, setProfile] = useState(normalizeProfile())
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -74,6 +76,7 @@ export default function ProfileReview() {
 
     try {
       await updateProfile(profileId, serializeProfile(profile))
+      setProfileId(profileId)
       navigate(ROUTES.DASHBOARD)
     } catch (error) {
       const message = isAxiosUploadError(error)

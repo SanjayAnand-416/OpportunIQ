@@ -9,7 +9,7 @@ import {
   UserRound,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
-import { disconnectGmail, getGmailErrorMessage, getGmailStatus, GMAIL_CONNECT_URL } from '../api/gmail'
+import { disconnectGmail, getGmailConnectUrl, getGmailErrorMessage, getGmailStatus } from '../api/gmail'
 import { getProfile, getProfileErrorMessage, updateProfile } from '../api/profile'
 import ErrorBanner from '../components/common/ErrorBanner'
 import ConfirmationDialog from '../components/common/ConfirmationDialog'
@@ -145,7 +145,7 @@ export default function Settings() {
 
   function handleConnectGmail() {
     if (!profileId) return
-    window.location.href = `${GMAIL_CONNECT_URL}?profile_id=${encodeURIComponent(profileId)}`
+    window.location.href = getGmailConnectUrl(profileId)
   }
 
   async function handleDisconnectGmail() {

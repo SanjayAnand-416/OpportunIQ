@@ -12,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { disconnectGmail, getGmailErrorMessage, getGmailStatus, GMAIL_CONNECT_URL, scanGmailInbox } from '../../api/gmail'
+import { disconnectGmail, getGmailConnectUrl, getGmailErrorMessage, getGmailStatus, scanGmailInbox } from '../../api/gmail'
 import { ROUTES } from '../../constants/routes'
 import { formatLastScanned } from '../../utils/gmail'
 import ErrorBanner from '../common/ErrorBanner'
@@ -148,7 +148,7 @@ export default function GmailConnectCard({ profileId }) {
   }, [fetchStatus])
 
   function handleConnectClick() {
-    window.location.href = `${GMAIL_CONNECT_URL}?profile_id=${encodeURIComponent(profileId)}`
+    window.location.href = getGmailConnectUrl(profileId)
   }
 
   async function handleRescan() {

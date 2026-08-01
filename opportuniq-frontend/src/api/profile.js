@@ -5,7 +5,7 @@ const UPLOAD_TIMEOUT_MS = 15000
 
 export async function uploadResume(file) {
   const formData = new FormData()
-  formData.append('resume', file)
+  formData.append('file', file)
 
   const response = await apiClient.post('/api/profile/upload', formData, {
     timeout: UPLOAD_TIMEOUT_MS,

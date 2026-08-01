@@ -1,6 +1,9 @@
-import apiClient from './client'
+import apiClient, { API_BASE_URL } from './client'
 
-export const GMAIL_CONNECT_URL = 'http://localhost:8000/api/gmail/connect'
+export function getGmailConnectUrl(profileId) {
+  const query = new URLSearchParams({ profile_id: profileId })
+  return `${API_BASE_URL}/api/gmail/connect?${query}`
+}
 
 export async function getGmailStatus(profileId) {
   const response = await apiClient.get('/api/gmail/status', {

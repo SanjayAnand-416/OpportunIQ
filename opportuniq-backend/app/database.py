@@ -330,4 +330,35 @@ async def init_db() -> None:
             )
             """
         )
+        await db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS saved_opportunities (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL,
+                opportunity_id TEXT NOT NULL,
+                status TEXT DEFAULT 'Not Applied',
+                notes TEXT,
+                saved_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        for column_name, column_type in {
+            "profile_id": "TEXT",
+            "opportunity_id": "TEXT",
+            "status": "TEXT DEFAULT 'Not Applied'",
+            "notes": "TEXT",
+            "saved_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "updated_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        }.items():
+            try:
+                await db.execute(
+                    f"ALTER TABLE saved_opportunities ADD COLUMN {column_name} {column_type}"
+                )
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_saved_profile_id ON saved_opportunities(profile_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_saved_opportunity_id ON saved_opportunities(opportunity_id)")
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_profile_opportunity ON saved_opportunities(profile_id, opportunity_id)")
         await db.commit()

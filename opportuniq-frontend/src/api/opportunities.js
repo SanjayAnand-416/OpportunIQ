@@ -24,6 +24,31 @@ export async function getOpportunitiesBySession(sessionId) {
   return response.data.opportunities
 }
 
+export async function getSavedOpportunities(profileId) {
+  const response = await apiClient.get('/api/opportunities/saved', {
+    params: profileId ? { profile_id: profileId } : undefined,
+  })
+
+  return response.data.opportunities ?? response.data.saved ?? response.data
+}
+
+export async function updateOpportunityStatus(opportunityId, status) {
+  const response = await apiClient.patch(
+    `/api/opportunities/${opportunityId}/status`,
+    { status },
+  )
+
+  return response.data
+}
+
+export async function removeSavedOpportunity(opportunityId) {
+  const response = await apiClient.delete(
+    `/api/opportunities/${opportunityId}/saved`,
+  )
+
+  return response.data
+}
+
 export function getOpportunitiesErrorMessage(error) {
   if (!error.response) {
     return 'Network failure. Please check your connection and try again.'

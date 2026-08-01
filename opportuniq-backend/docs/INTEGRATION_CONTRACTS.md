@@ -160,6 +160,12 @@ buffered events, accepts `ping`, and responds with `pong`.
 
 ## Gap Analysis Agent Contract
 
+Public result retrieval uses `GET /api/gap-analysis/analysis/{analysis_id}`.
+Latest role analysis remains `GET /api/gap-analysis/{profile_id}`, and an
+opportunity-specific result uses
+`GET /api/gap-analysis/{profile_id}/for-opportunity/{opportunity_id}`. Static
+`/analysis/` routing must remain ahead of the dynamic profile route.
+
 | Item | Contract |
 |---|---|
 | Active module | `app.agents.gap_analysis_agent` or `app.services.gap_analysis_service` |

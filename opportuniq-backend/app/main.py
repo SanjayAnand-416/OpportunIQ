@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from app.database import init_db
 from app.errors import IntegrationError, service_error_detail
+from app import config
 from app.routers.deadlines import router as deadlines_router
 from app.routers.gmail import router as gmail_router
 from app.routers.gap_analysis import router as gap_analysis_router
@@ -35,11 +36,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     logger.info("Initializing OpportunIQ database")
     await init_db()
-    start_scheduler()
-    try:
-        await restore_scheduled_reminders()
-    except Exception:
-        logger.exception("Reminder restoration failed; startup will continue")
+    if config.ENABLE_SCHEDULER:
+        start_scheduler()
+        try:
+            await restore_scheduled_reminders()
+        except Exception:
+            logger.exception("Reminder restoration failed; startup will continue")
     try:
         yield
     finally:

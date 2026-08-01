@@ -12,7 +12,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.jobstores.base import JobLookupError
 from apscheduler.triggers.date import DateTrigger
 
-from app.config import APP_TIMEZONE
+from app import config
 from app.models import ReminderExecutionResult
 from app.repositories import (
     deadline_repository,
@@ -73,7 +73,7 @@ def calculate_reminder_times(
     if deadline is None:
         return {}
     comparison_now = parse_deadline_datetime(now) or datetime.now(timezone.utc)
-    local_timezone = app_timezone or APP_TIMEZONE
+    local_timezone = app_timezone or config.APP_TIMEZONE
 
     candidates = {
         offset: deadline - lead_time
@@ -99,11 +99,14 @@ def build_job_id(deadline_id: str, offset: str) -> str:
 
 def scheduler_is_running() -> bool:
     """Return whether the process-local scheduler is running."""
-    return bool(scheduler.running)
+    return bool(config.ENABLE_SCHEDULER and scheduler.running)
 
 
 def start_scheduler() -> bool:
     """Start the process-local scheduler once."""
+    if not config.ENABLE_SCHEDULER:
+        logger.info("APScheduler is disabled by configuration")
+        return False
     if scheduler_is_running():
         return False
     scheduler.start()
@@ -349,6 +352,13 @@ def schedule_reminders(
     preferences: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Schedule every future reminder offset for one active deadline."""
+    if not config.ENABLE_SCHEDULER:
+        return {
+            "deadline_id": deadline_id,
+            "scheduled_jobs": [],
+            "skipped_offsets": list(ALL_REMINDER_OFFSETS),
+            "scheduler_disabled": True,
+        }
     if not scheduler_is_running():
         start_scheduler()
     fire_times = calculate_reminder_times(deadline_datetime)
@@ -408,6 +418,9 @@ def get_deadline_jobs(deadline_id: str) -> list[dict[str, str | None]]:
 
 async def restore_scheduled_reminders() -> dict[str, int]:
     """Recreate future in-memory jobs from the durable deadline registry."""
+    if not config.ENABLE_SCHEDULER:
+        logger.info("Skipping reminder restoration because APScheduler is disabled")
+        return {"deadlines_processed": 0, "jobs_scheduled": 0, "errors": 0}
     deadlines = await deadline_repository.list_schedulable_deadlines()
     summary = {
         "deadlines_processed": 0,

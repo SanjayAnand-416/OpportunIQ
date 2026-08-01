@@ -50,6 +50,23 @@ def test_scheduler_lifecycle_is_idempotent():
     asyncio.run(scenario())
 
 
+def test_scheduler_can_be_disabled(monkeypatch):
+    monkeypatch.setattr(scheduler_service.config, "ENABLE_SCHEDULER", False)
+
+    assert scheduler_service.start_scheduler() is False
+    assert scheduler_service.scheduler_is_running() is False
+    result = scheduler_service.schedule_reminders(
+        "d1", datetime.now(timezone.utc) + timedelta(days=10), "p1"
+    )
+    assert result["scheduler_disabled"] is True
+    assert result["scheduled_jobs"] == []
+    assert asyncio.run(scheduler_service.restore_scheduled_reminders()) == {
+        "deadlines_processed": 0,
+        "jobs_scheduled": 0,
+        "errors": 0,
+    }
+
+
 def test_schedule_cancel_reschedule_and_inspect(scheduler_db):
     async def scenario():
         deadline = datetime.now(timezone.utc) + timedelta(days=10)

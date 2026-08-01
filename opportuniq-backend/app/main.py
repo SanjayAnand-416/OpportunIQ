@@ -12,6 +12,7 @@ from app.routers.gmail import router as gmail_router
 from app.routers.notifications import router as notifications_router
 from app.routers.opportunities import router as opportunities_router
 from app.routers.profile import router as profile_router
+from app.routers.saved import router as saved_router
 from app.services.scheduler_service import (
     restore_scheduled_reminders,
     shutdown_scheduler,
@@ -61,6 +62,7 @@ app.include_router(opportunities_router)
 app.include_router(gmail_router)
 app.include_router(deadlines_router)
 app.include_router(notifications_router)
+app.include_router(saved_router)
 
 
 @app.get("/health", tags=["System"])

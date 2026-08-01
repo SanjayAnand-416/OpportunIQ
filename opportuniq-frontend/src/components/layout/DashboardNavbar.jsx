@@ -1,6 +1,8 @@
-import { Bell, Menu, Search } from 'lucide-react'
+import { Menu, Search } from 'lucide-react'
 import { useLocation } from 'react-router-dom'
 import { NAV_ITEMS } from '../../constants/navigation'
+import { useAppContext } from '../../contexts/AppContext'
+import NotificationBell from '../dashboard/NotificationBell'
 
 function usePageTitle() {
   const { pathname } = useLocation()
@@ -10,6 +12,7 @@ function usePageTitle() {
 
 export default function DashboardNavbar({ onMenuClick, searchQuery, onSearchQueryChange }) {
   const title = usePageTitle()
+  const { profileId } = useAppContext()
 
   return (
     <header className="dash-navbar">
@@ -42,13 +45,7 @@ export default function DashboardNavbar({ onMenuClick, searchQuery, onSearchQuer
           />
         </div>
 
-        <button
-          type="button"
-          className="dash-icon-btn"
-          aria-label="Notifications"
-        >
-          <Bell size={18} aria-hidden="true" />
-        </button>
+        <NotificationBell profileId={profileId} />
 
         <span className="dash-navbar-avatar" aria-hidden="true">
           AJ

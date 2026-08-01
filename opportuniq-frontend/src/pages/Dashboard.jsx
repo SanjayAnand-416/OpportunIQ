@@ -15,10 +15,10 @@ import ErrorBanner from '../components/common/ErrorBanner'
 import Toast from '../components/common/Toast'
 import { ROUTES } from '../constants/routes'
 import { useAppContext } from '../contexts/AppContext'
+import { useToast } from '../hooks/useToast'
 import { normalizeOpportunities } from '../utils/opportunities'
 
 const SKELETON_COUNT = 6
-const TOAST_DURATION_MS = 2500
 
 function matchesQuery(opportunity, query) {
   return [opportunity.title, opportunity.company, opportunity.location, opportunity.platform]
@@ -43,7 +43,7 @@ export default function Dashboard() {
   const [selectedOpportunity, setSelectedOpportunity] = useState(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
 
-  const [toastMessage, setToastMessage] = useState('')
+  const [toastMessage, setToastMessage] = useToast()
   const [dismissedProfileError, setDismissedProfileError] = useState('')
 
   const loadOpportunities = useCallback(
@@ -68,12 +68,6 @@ export default function Dashboard() {
     if (!profileId) return
     Promise.resolve().then(() => loadOpportunities())
   }, [profileId, loadOpportunities])
-
-  useEffect(() => {
-    if (!toastMessage) return undefined
-    const timeoutId = window.setTimeout(() => setToastMessage(''), TOAST_DURATION_MS)
-    return () => window.clearTimeout(timeoutId)
-  }, [toastMessage])
 
   const opportunities = useMemo(
     () => (rawOpportunities ? normalizeOpportunities(rawOpportunities, profile?.skills) : null),

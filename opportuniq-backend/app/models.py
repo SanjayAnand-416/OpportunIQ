@@ -519,6 +519,82 @@ class SchedulerStatusResponse(BaseModel):
     jobs: list[dict] = Field(default_factory=list)
 
 
+class SavedOpportunityUpdate(BaseModel):
+    status: str | None = None
+    notes: str | None = None
+
+
+class SavedOpportunityResponse(BaseModel):
+    saved_id: str
+    profile_id: str
+    opportunity_id: str
+    status: str
+    notes: str | None = None
+    saved_at: datetime | str | None = None
+    updated_at: datetime | str | None = None
+    title: str
+    company: str
+    platform: str
+    url: str
+    location: str | None = None
+    deadline: date | datetime | str | None = None
+    match_score: float = 0.0
+    combined_score: float = 0.0
+    skills_required: list[str] = Field(default_factory=list)
+    also_on: list[str] = Field(default_factory=list)
+
+
+class SavedOpportunityCreateResponse(BaseModel):
+    saved_id: str
+    saved: SavedOpportunityResponse
+
+
+class SavedOpportunityListResponse(BaseModel):
+    saved: list[SavedOpportunityResponse] = Field(default_factory=list)
+    count: int
+    profile_id: str
+
+
+class SavedOpportunityDeleteResponse(BaseModel):
+    success: bool
+    saved_id: str
+
+
+class PartialSkillMatch(BaseModel):
+    required: str
+    matched_as: str
+    similarity: float = Field(ge=0.0, le=1.0)
+
+
+class SkillGapResponse(BaseModel):
+    opportunity_id: str
+    profile_id: str
+    matched: list[str] = Field(default_factory=list)
+    partial: list[PartialSkillMatch] = Field(default_factory=list)
+    missing: list[str] = Field(default_factory=list)
+    match_percentage: float = Field(ge=0.0, le=100.0)
+
+
+class NotificationSettingsResponse(BaseModel):
+    profile_id: str
+    r_7d: bool = True
+    r_3d: bool = True
+    r_1d: bool = True
+    r_same_day: bool = True
+
+
+class NotificationSettingsUpdate(NotificationSettingsResponse):
+    r_7d: bool | None = None
+    r_3d: bool | None = None
+    r_1d: bool | None = None
+    r_same_day: bool | None = None
+
+    @field_validator("profile_id")
+    @classmethod
+    def validate_profile_id(cls, value: str) -> str:
+        return _non_blank(value)
+
+
 class GmailScanRequest(BaseModel):
     """Request body for triggering a Gmail deadline scan."""
 

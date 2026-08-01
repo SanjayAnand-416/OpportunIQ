@@ -259,6 +259,63 @@ async def init_db() -> None:
         )
         await db.execute(
             """
+            CREATE TABLE IF NOT EXISTS notifications (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL,
+                deadline_id TEXT,
+                subject TEXT NOT NULL,
+                message TEXT NOT NULL,
+                channel TEXT NOT NULL,
+                reminder_offset TEXT,
+                is_read BOOLEAN DEFAULT FALSE,
+                delivery_status TEXT DEFAULT 'created',
+                error_message TEXT,
+                sent_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        for column_name, column_type in {
+            "profile_id": "TEXT",
+            "deadline_id": "TEXT",
+            "subject": "TEXT",
+            "message": "TEXT",
+            "channel": "TEXT",
+            "reminder_offset": "TEXT",
+            "is_read": "BOOLEAN DEFAULT FALSE",
+            "delivery_status": "TEXT DEFAULT 'created'",
+            "error_message": "TEXT",
+            "sent_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+        }.items():
+            try:
+                await db.execute(
+                    f"ALTER TABLE notifications ADD COLUMN {column_name} {column_type}"
+                )
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notifications_profile_id "
+            "ON notifications(profile_id)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notifications_deadline_id "
+            "ON notifications(deadline_id)"
+        )
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_notifications_is_read "
+            "ON notifications(is_read)"
+        )
+        await db.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_deadline_offset_channel
+            ON notifications(deadline_id, reminder_offset, channel)
+            WHERE deadline_id IS NOT NULL AND reminder_offset IS NOT NULL
+            """
+        )
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS emails (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 gmail_message_id TEXT UNIQUE,

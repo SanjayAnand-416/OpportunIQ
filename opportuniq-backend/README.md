@@ -37,6 +37,9 @@ Interactive API documentation:
 http://localhost:8000/docs
 ```
 
+For full live, mixed, and offline demo setup, seed/reset commands, fallbacks,
+and the six-minute rehearsal, see [`../docs/DEMO_RUNBOOK.md`](../docs/DEMO_RUNBOOK.md).
+
 ## Deadline Registry
 
 Deadline API routes are available under `/api/deadlines`:

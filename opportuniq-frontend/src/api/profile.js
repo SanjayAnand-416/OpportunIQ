@@ -17,6 +17,11 @@ export async function uploadResume(file) {
   return response.data
 }
 
+export async function createManualProfile(profile) {
+  const response = await apiClient.post('/api/profile/manual', profile)
+  return response.data
+}
+
 export async function getProfile(profileId) {
   const response = await apiClient.get(`/api/profile/${profileId}`)
 

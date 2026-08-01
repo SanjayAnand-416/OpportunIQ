@@ -66,14 +66,14 @@ export function normalizeProfile(profile = {}) {
 
 export function serializeProfile(profile) {
   return {
-    full_name: profile.fullName,
+    name: profile.fullName,
     email: profile.email,
     degree: profile.degree,
     college: profile.college,
     year_of_study: profile.yearOfStudy,
     skills: profile.skills,
     target_roles: profile.targetRoles,
-    preferred_location: profile.preferredLocation,
+    location: profile.preferredLocation,
     opportunity_type: profile.opportunityType,
   }
 }

@@ -3,6 +3,15 @@ import apiClient from './client'
 
 const UPLOAD_TIMEOUT_MS = 15000
 
+function getSafeErrorDetail(data) {
+  if (typeof data?.detail === 'string') {
+    return data.detail
+  }
+
+  const nestedMessage = data?.detail?.error?.message
+  return typeof nestedMessage === 'string' ? nestedMessage : data?.message
+}
+
 export async function uploadResume(file) {
   const formData = new FormData()
   formData.append('file', file)
@@ -40,7 +49,7 @@ export function getProfileErrorMessage(error) {
   }
 
   const status = error.response.status
-  const detail = error.response.data?.detail || error.response.data?.message
+  const detail = getSafeErrorDetail(error.response.data)
 
   if (status === 404) {
     return 'Profile not found. Please upload your resume again.'
@@ -63,14 +72,24 @@ export function getUploadErrorMessage(error) {
   }
 
   const status = error.response.status
-  const detail = error.response.data?.detail || error.response.data?.message
+  const responseData = error.response.data
+  const detail = getSafeErrorDetail(responseData)
+  const fallback = responseData?.fallback || responseData?.detail?.error?.fallback
 
   if (status === 400 || status === 415) {
     return detail || 'Unsupported file. Please upload a PDF, DOC or DOCX resume.'
   }
 
   if (status === 422) {
-    return detail || 'ResumeAI extraction failed. Please try another resume or set up manually.'
+    return 'We could not extract a profile from this resume. Try another file or continue with manual setup.'
+  }
+
+  if (status === 503 && fallback === 'manual') {
+    return 'AI resume extraction is currently unavailable. You can continue by setting up your profile manually.'
+  }
+
+  if (status === 504) {
+    return 'Resume extraction is taking longer than expected. Please try again or continue with manual setup.'
   }
 
   if (status >= 500) {

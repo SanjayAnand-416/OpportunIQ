@@ -36,7 +36,9 @@ def _load_gap_analysis_agent():
 async def _run_gap_analysis_agent(**kwargs) -> GapAnalysisResult:
     runner = _load_gap_analysis_agent()
     if runner is None: raise HTTPException(503, "Gap analysis service is not available.")
-    supported = {key: value for key, value in kwargs.items() if key in inspect.signature(runner).parameters}
+    parameters = inspect.signature(runner).parameters
+    accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
+    supported = kwargs if accepts_kwargs else {key: value for key, value in kwargs.items() if key in parameters}
     try:
         if inspect.iscoroutinefunction(runner): value = await asyncio.wait_for(runner(**supported), 60)
         else: value = await asyncio.wait_for(asyncio.to_thread(runner, **supported), 60)

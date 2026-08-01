@@ -202,22 +202,22 @@ demo modes retain the same public API shapes.
 
 | Frontend feature | Frontend request | Backend route | Status | Mismatch |
 |---|---|---|---|---|
-| Manual profile | No API call implemented | `POST /api/profile/manual` | FRONTEND_MISSING | Manual form does not persist through API |
-| Resume upload | multipart `resume` | `POST /api/profile/upload`, field `file` | REQUEST_MISMATCH | Multipart field name differs |
+| Manual profile | `POST /api/profile/manual` | Same | ALIGNED | Reuses existing profile form and stores public profile ID |
+| Resume upload | multipart `file` | `POST /api/profile/upload`, field `file` | ALIGNED | Live ResumeAI remains guarded missing |
 | Profile retrieve/edit | `GET/PATCH /api/profile/{profile_id}` | Same | ALIGNED | Public ID stored as `opportuniq:profileId` |
 | Opportunity search | `POST /api/opportunities/search` | Same | ALIGNED | Controlled provider fallback still needed in UI |
 | Opportunity results | `GET /api/opportunities` by profile/session | Same | ALIGNED | None |
 | Agent trace | `/ws/agent-trace?session_id=...` | Same | ALIGNED | Frontend deduplication/reconnect needs tests |
-| Save opportunity | No canonical create call | `POST /api/saved/{opportunity_id}` | REQUEST_MISMATCH | UI helper uses obsolete opportunity routes |
-| Tracker status | `PATCH /api/opportunities/{id}/status` | `PATCH /api/saved/{saved_id}` | REQUEST_MISMATCH | Wrong resource and identifier |
-| Remove saved | `DELETE /api/opportunities/{id}/saved` | `DELETE /api/saved/{saved_id}` | REQUEST_MISMATCH | Wrong route/identifier |
+| Save opportunity | `POST /api/saved/{opportunity_id}` | Same | ALIGNED | Uses public profile query parameter |
+| Tracker status | `PATCH /api/saved/{saved_id}` | Same | ALIGNED | Canonical status values aligned |
+| Remove saved | `DELETE /api/saved/{saved_id}` | Same | ALIGNED | Uses public saved ID |
 | Lightweight skill gap | No API helper | `GET /api/opportunities/{id}/skill-gap` | FRONTEND_MISSING | UI has no integration |
 | Gap Advisor | No page/helper | `/api/gap-analysis/*` | FRONTEND_MISSING | BLOCKED_BY_TEAMMATE for live run |
-| Gmail connect | hardcoded localhost URL | `GET /api/gmail/connect` | REQUEST_MISMATCH | Ignores configurable API base; must include profile ID |
+| Gmail connect | configurable API base + profile query | `GET /api/gmail/connect` | ALIGNED | Live service guarded missing |
 | Gmail status/scan/disconnect | Canonical routes | Same | ALIGNED | Live service guarded missing |
 | Deadline list/CRUD | Canonical routes | Same | ALIGNED | Calendar-specific route is unused but not required |
 | Notifications | list/read/read-all | Same | ALIGNED | Sends redundant `unread` query parameter |
-| Reminder settings | Browser local storage only | `GET/PUT /api/settings/notifications` | BACKEND_MISSING_IN_CLIENT | UI does not persist backend preferences |
+| Reminder settings | `GET/PUT /api/settings/notifications` | Same | ALIGNED | Four scheduler offsets are API-backed |
 | Scheduler diagnostics/test | No UI helper | notification status/test routes | FRONTEND_MISSING | Optional demo control |
 
 ## Current Integration Status Summary
@@ -229,3 +229,5 @@ demo modes retain the same public API shapes.
 - **Guarded missing:** ResumeAI, Tavily, discovery extraction/ranking, Gmail,
   Guardian, and canonical Gap Analysis execution.
 - **Not performed:** live external API, OAuth, model download, or email checks.
+- **Frontend validation:** npm lockfile synchronized; ESLint and production
+  build pass. No frontend unit-test or typecheck script is configured.

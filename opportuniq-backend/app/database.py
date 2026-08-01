@@ -1,4 +1,6 @@
 import os
+import logging
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -6,6 +8,60 @@ import aiosqlite
 
 
 DATABASE_PATH = os.getenv("DATABASE_PATH", "opportuniq.db")
+logger = logging.getLogger(__name__)
+
+
+async def _populate_public_ids(
+    db: aiosqlite.Connection,
+    *,
+    table: str,
+    public_column: str,
+) -> None:
+    """Backfill stable UUIDs for legacy rows without changing internal keys."""
+    cursor = await db.execute(
+        f"SELECT id FROM {table} WHERE {public_column} IS NULL OR TRIM({public_column}) = ''"
+    )
+    rows = await cursor.fetchall()
+    await cursor.close()
+    for (internal_id,) in rows:
+        public_id = str(
+            uuid.uuid5(uuid.NAMESPACE_URL, f"opportuniq:{table}:{internal_id}")
+        )
+        await db.execute(
+            f"UPDATE {table} SET {public_column} = ? WHERE id = ?",
+            (public_id, internal_id),
+        )
+
+
+async def _create_unique_index_if_clean(
+    db: aiosqlite.Connection,
+    *,
+    name: str,
+    table: str,
+    columns: tuple[str, ...],
+    where: str | None = None,
+) -> bool:
+    """Create a unique index unless retained legacy rows conflict with it."""
+    where_clause = f" WHERE {where}" if where else ""
+    column_sql = ", ".join(columns)
+    cursor = await db.execute(
+        f"SELECT 1 FROM {table}{where_clause} "
+        f"GROUP BY {column_sql} HAVING COUNT(*) > 1 LIMIT 1"
+    )
+    has_duplicates = await cursor.fetchone() is not None
+    await cursor.close()
+    if has_duplicates:
+        logger.warning(
+            "Skipping unique index %s because %s contains duplicate legacy rows",
+            name,
+            table,
+        )
+        return False
+    await db.execute(
+        f"CREATE UNIQUE INDEX IF NOT EXISTS {name} ON {table}({column_sql})"
+        f"{where_clause}"
+    )
+    return True
 
 
 @asynccontextmanager
@@ -46,13 +102,23 @@ async def init_db() -> None:
         )
         for column_name, column_type in {
             "profile_id": "TEXT",
+            "name": "TEXT",
+            "email": "TEXT",
             "year_of_study": "TEXT",
             "graduation_year": "INTEGER",
             "degree": "TEXT",
             "college": "TEXT",
             "target_roles": "TEXT",
+            "phone": "TEXT",
+            "education": "TEXT",
+            "skills": "TEXT",
             "location": "TEXT",
             "opportunity_type": "TEXT",
+            "experience": "TEXT",
+            "projects": "TEXT",
+            "raw_resume_text": "TEXT",
+            "created_at": "TEXT",
+            "updated_at": "TEXT",
         }.items():
             try:
                 await db.execute(
@@ -61,6 +127,18 @@ async def init_db() -> None:
             except aiosqlite.OperationalError as exc:
                 if "duplicate column name" not in str(exc).lower():
                     raise
+        await _populate_public_ids(
+            db,
+            table="student_profiles",
+            public_column="profile_id",
+        )
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_student_profiles_public_id",
+            table="student_profiles",
+            columns=("profile_id",),
+            where="profile_id IS NOT NULL",
+        )
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS opportunities (
@@ -100,7 +178,12 @@ async def init_db() -> None:
             "profile_id": "TEXT",
             "company": "TEXT",
             "platform": "TEXT",
+            "organization": "TEXT",
+            "location": "TEXT",
+            "url": "TEXT",
             "url_hash": "TEXT",
+            "description": "TEXT",
+            "deadline": "TEXT",
             "stipend_or_prize": "TEXT",
             "eligibility": "TEXT",
             "skills_required": "TEXT",
@@ -109,7 +192,9 @@ async def init_db() -> None:
             "urgency_score": "REAL DEFAULT 0",
             "combined_score": "REAL DEFAULT 0",
             "is_expired": "INTEGER DEFAULT 0",
-            "fetched_at": "TEXT DEFAULT CURRENT_TIMESTAMP",
+            "opportunity_type": "TEXT",
+            "fetched_at": "TEXT",
+            "created_at": "TEXT",
         }.items():
             try:
                 await db.execute(
@@ -118,6 +203,18 @@ async def init_db() -> None:
             except aiosqlite.OperationalError as exc:
                 if "duplicate column name" not in str(exc).lower():
                     raise
+        await _populate_public_ids(
+            db,
+            table="opportunities",
+            public_column="opportunity_id",
+        )
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_opportunities_public_id",
+            table="opportunities",
+            columns=("opportunity_id",),
+            where="opportunity_id IS NOT NULL",
+        )
         await db.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_opportunities_session_id
@@ -187,8 +284,8 @@ async def init_db() -> None:
             "needs_review": "BOOLEAN DEFAULT FALSE",
             "is_completed": "BOOLEAN DEFAULT FALSE",
             "is_cancelled": "BOOLEAN DEFAULT FALSE",
-            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "created_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP",
         }.items():
             try:
                 await db.execute(
@@ -221,12 +318,12 @@ async def init_db() -> None:
             ON deadline_registry(needs_review)
             """
         )
-        await db.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_deadline_registry_gmail_unique
-            ON deadline_registry(profile_id, gmail_message_id)
-            WHERE gmail_message_id IS NOT NULL
-            """
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_deadline_registry_gmail_unique",
+            table="deadline_registry",
+            columns=("profile_id", "gmail_message_id"),
+            where="gmail_message_id IS NOT NULL",
         )
         await db.execute(
             """
@@ -285,8 +382,8 @@ async def init_db() -> None:
             "is_read": "BOOLEAN DEFAULT FALSE",
             "delivery_status": "TEXT DEFAULT 'created'",
             "error_message": "TEXT",
-            "sent_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "sent_at": "TIMESTAMP",
+            "created_at": "TIMESTAMP",
         }.items():
             try:
                 await db.execute(
@@ -307,12 +404,12 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_notifications_is_read "
             "ON notifications(is_read)"
         )
-        await db.execute(
-            """
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_deadline_offset_channel
-            ON notifications(deadline_id, reminder_offset, channel)
-            WHERE deadline_id IS NOT NULL AND reminder_offset IS NOT NULL
-            """
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_notifications_deadline_offset_channel",
+            table="notifications",
+            columns=("deadline_id", "reminder_offset", "channel"),
+            where="deadline_id IS NOT NULL AND reminder_offset IS NOT NULL",
         )
         await db.execute(
             """
@@ -348,8 +445,8 @@ async def init_db() -> None:
             "opportunity_id": "TEXT",
             "status": "TEXT DEFAULT 'Not Applied'",
             "notes": "TEXT",
-            "saved_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "saved_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP",
         }.items():
             try:
                 await db.execute(
@@ -360,7 +457,12 @@ async def init_db() -> None:
                     raise
         await db.execute("CREATE INDEX IF NOT EXISTS idx_saved_profile_id ON saved_opportunities(profile_id)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_saved_opportunity_id ON saved_opportunities(opportunity_id)")
-        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_profile_opportunity ON saved_opportunities(profile_id, opportunity_id)")
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_saved_profile_opportunity",
+            table="saved_opportunities",
+            columns=("profile_id", "opportunity_id"),
+        )
         await db.execute(
             """
             CREATE TABLE IF NOT EXISTS gap_analyses (
@@ -382,8 +484,8 @@ async def init_db() -> None:
             """
         )
         for column_name, column_type in {
-            "created_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-            "updated_at": "TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+            "created_at": "TIMESTAMP",
+            "updated_at": "TIMESTAMP",
         }.items():
             try:
                 await db.execute(
@@ -404,16 +506,22 @@ async def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_gap_analyses_generated_at "
             "ON gap_analyses(generated_at)"
         )
-        await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_gap_role_profile "
-            "ON gap_analyses(profile_id) "
-            "WHERE opportunity_id IS NULL AND analysis_mode = 'profile_vs_role'"
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_gap_role_profile",
+            table="gap_analyses",
+            columns=("profile_id",),
+            where="opportunity_id IS NULL AND analysis_mode = 'profile_vs_role'",
         )
-        await db.execute(
-            "CREATE UNIQUE INDEX IF NOT EXISTS idx_gap_profile_opportunity "
-            "ON gap_analyses(profile_id, opportunity_id) "
-            "WHERE opportunity_id IS NOT NULL "
-            "AND analysis_mode = 'profile_vs_opportunity'"
+        await _create_unique_index_if_clean(
+            db,
+            name="idx_gap_profile_opportunity",
+            table="gap_analyses",
+            columns=("profile_id", "opportunity_id"),
+            where=(
+                "opportunity_id IS NOT NULL "
+                "AND analysis_mode = 'profile_vs_opportunity'"
+            ),
         )
         await db.execute(
             """

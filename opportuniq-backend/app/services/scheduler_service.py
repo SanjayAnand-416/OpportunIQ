@@ -18,6 +18,7 @@ from app.repositories import (
     deadline_repository,
     notification_repository,
     profile_repository,
+    settings_repository,
 )
 from app.websocket_manager import emit_trace
 from app.services.email_service import send_reminder_email
@@ -345,11 +346,15 @@ def schedule_reminders(
     deadline_id: str,
     deadline_datetime: datetime | str,
     profile_id: str,
+    preferences: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Schedule every future reminder offset for one active deadline."""
     if not scheduler_is_running():
         start_scheduler()
     fire_times = calculate_reminder_times(deadline_datetime)
+    preference_keys = {"7d": "r_7d", "3d": "r_3d", "1d": "r_1d", "0d": "r_same_day"}
+    if preferences:
+        fire_times = {offset: value for offset, value in fire_times.items() if preferences.get(preference_keys[offset], True)}
     scheduled_jobs: list[str] = []
     for offset, fire_time in fire_times.items():
         job_id = build_job_id(deadline_id, offset)
@@ -414,10 +419,16 @@ async def restore_scheduled_reminders() -> dict[str, int]:
         try:
             if parse_deadline_datetime(deadline.get("deadline_datetime")) is None:
                 raise ValueError("Malformed deadline datetime")
+            try:
+                preferences = await settings_repository.get_notification_settings(deadline["profile_id"])
+            except Exception as exc:
+                logger.warning("Reminder preferences unavailable; using defaults: %s", type(exc).__name__)
+                preferences = None
             result = schedule_reminders(
                 deadline["deadline_id"],
                 deadline["deadline_datetime"],
                 deadline["profile_id"],
+                preferences=preferences,
             )
             summary["jobs_scheduled"] += len(result["scheduled_jobs"])
         except Exception as exc:

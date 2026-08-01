@@ -1,6 +1,10 @@
 """UTC reminder-time calculations and scheduler orchestration."""
 
+import asyncio
+import importlib
+import inspect
 import logging
+import uuid
 from datetime import datetime, time, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -8,6 +12,13 @@ from zoneinfo import ZoneInfo
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from app.config import APP_TIMEZONE
+from app.models import ReminderExecutionResult
+from app.repositories import (
+    deadline_repository,
+    notification_repository,
+    profile_repository,
+)
+from app.websocket_manager import emit_trace
 
 
 logger = logging.getLogger(__name__)
@@ -118,3 +129,230 @@ def list_scheduled_jobs() -> list[dict[str, str | None]]:
         }
         for job in scheduler.get_jobs()
     ]
+
+
+async def _invoke_optional(function: Any, **kwargs: Any) -> Any:
+    """Invoke a sync or async optional integration with a bounded timeout."""
+    if inspect.iscoroutinefunction(function):
+        return await asyncio.wait_for(function(**kwargs), timeout=10)
+    result = await asyncio.wait_for(
+        asyncio.to_thread(function, **kwargs),
+        timeout=10,
+    )
+    if inspect.isawaitable(result):
+        return await asyncio.wait_for(result, timeout=10)
+    return result
+
+
+def _optional_function(module_names: tuple[str, ...], function_name: str) -> Any | None:
+    for module_name in module_names:
+        try:
+            module = importlib.import_module(module_name)
+        except (ImportError, ModuleNotFoundError):
+            continue
+        function = getattr(module, function_name, None)
+        if callable(function):
+            return function
+    return None
+
+
+def _fallback_reminder_content(
+    deadline: dict[str, Any], days_remaining: int | None
+) -> tuple[str, str]:
+    title = str(deadline.get("title") or "Upcoming deadline")
+    organization = str(deadline.get("organization") or "the organization")
+    if days_remaining is None:
+        due_text = "soon"
+    elif days_remaining < 0:
+        due_text = "overdue"
+    elif days_remaining == 0:
+        due_text = "today"
+    elif days_remaining == 1:
+        due_text = "in 1 day"
+    else:
+        due_text = f"in {days_remaining} days"
+    body = f"{title} for {organization} is due {due_text}."
+    action_required = str(deadline.get("action_required") or "Review and complete it.")
+    body += f" Required action: {action_required}"
+    return f"Deadline reminder: {title}", body
+
+
+async def _generate_reminder_content(
+    profile: dict[str, Any],
+    deadline: dict[str, Any],
+    days_remaining: int | None,
+) -> tuple[str, str]:
+    """Generate reminder content through a compatible adapter or local fallback."""
+    function = _optional_function(
+        ("app.services.groq_service", "services.groq_service"),
+        "generate_reminder",
+    )
+    if function is not None:
+        expected = {
+            "profile_name",
+            "skills",
+            "deadline_title",
+            "deadline_dt",
+            "days_left",
+        }
+        if expected.issubset(inspect.signature(function).parameters):
+            try:
+                result = await _invoke_optional(
+                    function,
+                    profile_name=str(profile.get("name") or "Student"),
+                    skills=list(profile.get("skills") or []),
+                    deadline_title=str(deadline.get("title") or "Deadline"),
+                    deadline_dt=str(deadline.get("deadline_datetime") or ""),
+                    days_left=days_remaining or 0,
+                )
+                if hasattr(result, "model_dump"):
+                    result = result.model_dump()
+                if isinstance(result, dict):
+                    subject = result.get("subject")
+                    body = result.get("body") or result.get("message")
+                    if subject and body:
+                        return str(subject), str(body)
+            except Exception as exc:
+                logger.warning("Groq reminder generation failed: %s", exc)
+    return _fallback_reminder_content(deadline, days_remaining)
+
+
+async def _send_email_if_available(
+    *, profile: dict[str, Any], subject: str, body: str
+) -> bool:
+    email = str(profile.get("email") or "").strip()
+    if not email:
+        return False
+    function = _optional_function(
+        ("app.services.email_service", "services.email_service"),
+        "send_reminder_email",
+    )
+    if function is None:
+        return False
+    try:
+        result = await _invoke_optional(
+            function,
+            to_email=email,
+            subject=subject,
+            body=body,
+        )
+        if hasattr(result, "success"):
+            return bool(result.success)
+        if isinstance(result, dict):
+            return bool(result.get("success"))
+        return bool(result)
+    except Exception as exc:
+        logger.warning("Reminder email delivery skipped or failed: %s", exc)
+        return False
+
+
+async def execute_reminder(
+    deadline_id: str,
+    profile_id: str,
+    reminder_offset: str,
+    *,
+    force: bool = False,
+) -> dict[str, Any]:
+    """Execute one reminder without allowing integration failures to escape."""
+    result_base = {
+        "deadline_id": deadline_id,
+        "profile_id": profile_id,
+        "reminder_offset": reminder_offset,
+    }
+    try:
+        if reminder_offset not in ALL_REMINDER_OFFSETS and not reminder_offset.startswith("test"):
+            return ReminderExecutionResult(
+                success=False, skipped=True, reason="invalid_offset", **result_base
+            ).model_dump()
+        deadline = await deadline_repository.get_deadline_by_id(deadline_id)
+        if deadline is None:
+            return ReminderExecutionResult(
+                success=False, skipped=True, reason="deadline_not_found", **result_base
+            ).model_dump()
+        profile = await profile_repository.get_profile_by_id(profile_id)
+        if profile is None:
+            return ReminderExecutionResult(
+                success=False, skipped=True, reason="profile_not_found", **result_base
+            ).model_dump()
+        if not force:
+            reason = None
+            if deadline.get("is_completed"):
+                reason = "deadline_completed"
+            elif deadline.get("is_cancelled"):
+                reason = "deadline_cancelled"
+            elif not deadline.get("deadline_datetime"):
+                reason = "deadline_datetime_missing"
+            elif await notification_repository.notification_exists(
+                deadline_id=deadline_id,
+                reminder_offset=reminder_offset,
+                channel="dashboard",
+            ):
+                reason = "notification_exists"
+            if reason:
+                return ReminderExecutionResult(
+                    success=True, skipped=True, reason=reason, **result_base
+                ).model_dump()
+
+        days_remaining = deadline_repository.calculate_days_remaining(
+            deadline.get("deadline_datetime")
+        )
+        subject, body = await _generate_reminder_content(
+            profile, deadline, days_remaining
+        )
+        stored_offset = (
+            f"test:{uuid.uuid4()}" if force and reminder_offset == "test" else reminder_offset
+        )
+        notification = await notification_repository.create_notification(
+            profile_id=profile_id,
+            deadline_id=deadline_id,
+            subject=subject,
+            message=body,
+            channel="dashboard",
+            reminder_offset=stored_offset,
+            delivery_status="created",
+        )
+        try:
+            await emit_trace(
+                session_id=profile_id,
+                agent="notifier",
+                status="notification",
+                message=body,
+                metadata={
+                    "notification_id": notification["id"],
+                    "deadline_id": deadline_id,
+                    "subject": subject,
+                    "reminder_offset": stored_offset,
+                },
+            )
+        except Exception as exc:
+            logger.warning("Reminder WebSocket push failed: %s", exc)
+
+        email_sent = await _send_email_if_available(
+            profile=profile, subject=subject, body=body
+        )
+        if email_sent:
+            await notification_repository.create_notification(
+                profile_id=profile_id,
+                deadline_id=deadline_id,
+                subject=subject,
+                message=body,
+                channel="email",
+                reminder_offset=stored_offset,
+                delivery_status="sent",
+            )
+        return ReminderExecutionResult(
+            success=True,
+            notification_id=notification["id"],
+            subject=subject,
+            message=body,
+            email_sent=email_sent,
+            **result_base,
+        ).model_dump()
+    except Exception as exc:
+        logger.exception("Reminder execution failed for deadline %s", deadline_id)
+        return ReminderExecutionResult(
+            success=False,
+            skipped=True,
+            reason=type(exc).__name__,
+            **result_base,
+        ).model_dump()

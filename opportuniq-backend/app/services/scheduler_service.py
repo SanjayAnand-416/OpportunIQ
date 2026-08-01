@@ -418,3 +418,31 @@ def get_deadline_jobs(deadline_id: str) -> list[dict[str, str | None]]:
     """Return serializable jobs belonging to one deadline."""
     prefix = f"reminder:{deadline_id}:"
     return [job for job in list_scheduled_jobs() if job["id"].startswith(prefix)]
+
+
+async def restore_scheduled_reminders() -> dict[str, int]:
+    """Recreate future in-memory jobs from the durable deadline registry."""
+    deadlines = await deadline_repository.list_schedulable_deadlines()
+    summary = {
+        "deadlines_processed": 0,
+        "jobs_scheduled": 0,
+        "errors": 0,
+    }
+    for deadline in deadlines:
+        summary["deadlines_processed"] += 1
+        try:
+            result = schedule_reminders(
+                deadline["deadline_id"],
+                deadline["deadline_datetime"],
+                deadline["profile_id"],
+            )
+            summary["jobs_scheduled"] += len(result["scheduled_jobs"])
+        except Exception as exc:
+            summary["errors"] += 1
+            logger.warning(
+                "Could not restore reminders for deadline %s: %s",
+                deadline.get("deadline_id"),
+                exc,
+            )
+    logger.info("Reminder restoration summary: %s", summary)
+    return summary

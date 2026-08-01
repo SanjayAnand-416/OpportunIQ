@@ -8,12 +8,13 @@ from typing import Any
 
 from jobspy import scrape_jobs
 
+from app.config import JOBSPY_TIMEOUT_SECONDS
+
 
 logger = logging.getLogger(__name__)
 
 JOBSPY_SITES = ["linkedin", "naukri", "indeed", "glassdoor", "google"]
 MAX_RESULTS_WANTED = 50
-DEFAULT_TIMEOUT_SECONDS = 25
 
 
 def _clean_value(value: Any) -> Any:
@@ -75,7 +76,7 @@ async def search_jobs(
                 results_wanted=safe_results_wanted,
                 hours_old=hours_old,
             ),
-            timeout=DEFAULT_TIMEOUT_SECONDS,
+            timeout=JOBSPY_TIMEOUT_SECONDS,
         )
     except (asyncio.TimeoutError, Exception) as exc:
         logger.warning("JobSpy search failed for role %s: %s", search_role, exc)

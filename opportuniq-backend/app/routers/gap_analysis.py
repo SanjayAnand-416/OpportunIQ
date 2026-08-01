@@ -7,6 +7,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
+from app.config import AGENT_TIMEOUT_SECONDS
 from app.models import GapAnalysisResult, GapAnalysisRunRequest
 from app.repositories import gap_analysis_repository
 from app.repositories.opportunity_repository import get_opportunity_by_id
@@ -40,8 +41,8 @@ async def _run_gap_analysis_agent(**kwargs) -> GapAnalysisResult:
     accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in parameters.values())
     supported = kwargs if accepts_kwargs else {key: value for key, value in kwargs.items() if key in parameters}
     try:
-        if inspect.iscoroutinefunction(runner): value = await asyncio.wait_for(runner(**supported), 60)
-        else: value = await asyncio.wait_for(asyncio.to_thread(runner, **supported), 60)
+        if inspect.iscoroutinefunction(runner): value = await asyncio.wait_for(runner(**supported), AGENT_TIMEOUT_SECONDS)
+        else: value = await asyncio.wait_for(asyncio.to_thread(runner, **supported), AGENT_TIMEOUT_SECONDS)
     except TimeoutError as exc: raise HTTPException(504, "Gap analysis timed out.") from exc
     except ValueError as exc: raise HTTPException(422, "Gap analysis input was rejected.") from exc
     if hasattr(value, "model_dump"): value = value.model_dump()

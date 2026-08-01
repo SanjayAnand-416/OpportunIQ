@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -307,3 +308,4 @@ def test_successful_resume_upload_uses_mocked_resumeai(client, monkeypatch):
     stored = client.get(f"/api/profile/{body['profile_id']}")
     assert stored.status_code == 200
     assert stored.json()["name"] == "Resume Student"
+    assert b"%PDF-1.4" not in Path(database.DATABASE_PATH).read_bytes()

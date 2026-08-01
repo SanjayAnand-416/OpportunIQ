@@ -4,11 +4,11 @@ from datetime import datetime
 from typing import Any
 
 from app.models import DeadlineCreate
-from app.repositories import deadline_repository
+from app.repositories import deadline_repository, settings_repository
 from app.services import scheduler_service
 
 
-def _schedule_active_deadline(deadline: dict[str, Any]) -> dict[str, Any]:
+async def _schedule_active_deadline(deadline: dict[str, Any]) -> dict[str, Any]:
     if (
         deadline.get("deadline_datetime")
         and not deadline.get("needs_review")
@@ -19,6 +19,7 @@ def _schedule_active_deadline(deadline: dict[str, Any]) -> dict[str, Any]:
             deadline["deadline_id"],
             deadline["deadline_datetime"],
             deadline["profile_id"],
+            preferences=await settings_repository.get_notification_settings(deadline["profile_id"]),
         )
     return {
         "deadline_id": deadline["deadline_id"],
@@ -33,7 +34,7 @@ async def create_manual_deadline(payload: DeadlineCreate) -> dict[str, Any]:
         **payload.model_dump(),
         source="manual",
     )
-    return {"deadline": deadline, "schedule": _schedule_active_deadline(deadline)}
+    return {"deadline": deadline, "schedule": await _schedule_active_deadline(deadline)}
 
 
 async def create_gmail_deadline(
@@ -65,7 +66,7 @@ async def create_gmail_deadline(
         confidence=confidence,
         needs_review=needs_review,
     )
-    return {"deadline": deadline, "schedule": _schedule_active_deadline(deadline)}
+    return {"deadline": deadline, "schedule": await _schedule_active_deadline(deadline)}
 
 
 async def update_existing_deadline(
@@ -78,10 +79,13 @@ async def update_existing_deadline(
     if deadline.get("is_completed") or deadline.get("is_cancelled"):
         scheduler_service.cancel_reminders(deadline_id)
     elif deadline.get("deadline_datetime") and not deadline.get("needs_review"):
-        scheduler_service.reschedule_reminders(
+        preferences = await settings_repository.get_notification_settings(deadline["profile_id"])
+        scheduler_service.cancel_reminders(deadline_id)
+        scheduler_service.schedule_reminders(
             deadline_id,
             deadline["deadline_datetime"],
             deadline["profile_id"],
+            preferences=preferences,
         )
     else:
         scheduler_service.cancel_reminders(deadline_id)

@@ -252,7 +252,16 @@ they exist. Run `python scripts/smoke_live_integrations.py` without flags first;
 enable one provider at a time only when its canonical active module is present.
 
 Current reconciliation status: local backend and Gap result retrieval are live
-verified; JobSpy/reminder/email paths are mock verified; ResumeAI, Tavily,
-discovery extraction/ranking, Gmail, Guardian, and full Gap generation remain
-guarded. Browser E2E is deferred because the frontend has no configured browser
-test framework.
+verified; JobSpy/reminder/email paths are mock verified; ResumeAI is contract
+verified with a guarded manual fallback; Tavily, discovery extraction/ranking,
+Gmail, Guardian, and full Gap generation remain guarded. Browser E2E is deferred
+because the frontend has no configured browser test framework.
+
+For ResumeAI, configure `RESUMEAI_API_URL` with the deployed extraction endpoint
+and optionally `RESUMEAI_API_KEY`. Without a reachable endpoint, resume upload
+must return 503 and the UI must retain the selected file while offering "Set Up
+Manually." Do not describe ResumeAI as live until a safe real upload returns 201,
+the profile review opens, and `GET /api/profile/{profile_id}` returns the mapped
+profile. Person C's root `services/resume_service.py` is not imported directly;
+its legacy model imports and `UploadFile`/async-mapper signatures require the
+active `app.services.resume_service` boundary.

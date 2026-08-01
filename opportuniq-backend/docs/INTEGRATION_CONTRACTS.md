@@ -65,7 +65,7 @@ buffered events, accepts `ping`, and responds with `pong`.
 | Exceptions | configuration -> unavailable; timeout -> timeout; malformed response -> upstream/contract error |
 | Timeout | `EXTERNAL_HTTP_TIMEOUT_SECONDS` |
 | Fallback | manual profile creation; upload never returns fake extraction success |
-| Status | **guarded missing**. A root `services.resume_service` has an incompatible `UploadFile` signature and legacy model imports; no active adapter exists. |
+| Status | **CONTRACT_VERIFIED**. `app.services.resume_service` adapts the root HTTP contract to bytes/name/content type and active profile fields. Live extraction is not verified. |
 
 ## Tavily Contract
 
@@ -209,7 +209,7 @@ demo modes retain the same public API shapes.
 | Frontend feature | Frontend request | Backend route | Status | Mismatch |
 |---|---|---|---|---|
 | Manual profile | `POST /api/profile/manual` | Same | ALIGNED | Reuses existing profile form and stores public profile ID |
-| Resume upload | multipart `file` | `POST /api/profile/upload`, field `file` | ALIGNED | Live ResumeAI remains guarded missing |
+| Resume upload | multipart `file` | `POST /api/profile/upload`, field `file` | ALIGNED | Adapter contract verified; live ResumeAI unverified |
 | Profile retrieve/edit | `GET/PATCH /api/profile/{profile_id}` | Same | ALIGNED | Public ID stored as `opportuniq:profileId` |
 | Opportunity search | `POST /api/opportunities/search` | Same | ALIGNED | Controlled provider fallback still needed in UI |
 | Opportunity results | `GET /api/opportunities` by profile/session | Same | ALIGNED | None |
@@ -232,8 +232,9 @@ demo modes retain the same public API shapes.
 - **Mock verified:** active routers, repositories, scheduler, WebSocket,
   reminder Groq/SMTP boundaries.
 - **Adapter only:** reminder Groq and SMTP.
-- **Guarded missing:** ResumeAI, Tavily, discovery extraction/ranking, Gmail,
-  Guardian, and canonical Gap Analysis execution.
+- **Contract verified:** ResumeAI active HTTP adapter and manual fallback.
+- **Guarded missing:** Tavily, discovery extraction/ranking, Gmail, Guardian,
+  and canonical Gap Analysis execution.
 - **Not performed:** live external API, OAuth, model download, or email checks.
 - **Frontend validation:** npm lockfile synchronized; ESLint and production
   build pass. No frontend unit-test or typecheck script is configured.
@@ -247,7 +248,7 @@ remain outside the active `app` package and are not production imports.
 
 | Integration | Actual module and callable | Execution and return | Error/timeout/fallback | Persistence and consumer | Status |
 |---|---|---|---|---|---|
-| ResumeAI | Root `services.resume_service.forward_to_resumeai(file: UploadFile)` and async `map_resumeai_to_profile(dict)`; active `app.services.resume_service` absent | async; root types use legacy `models` | Root has service-specific exceptions/timeouts; active router keeps manual fallback | Active profile router/repository; Resume Upload page | **CONTRACT_MISMATCH** |
+| ResumeAI | Root `services.resume_service.forward_to_resumeai(file: UploadFile)` and async mapper use legacy `models`; active adapter accepts bytes/name/content type and maps active fields | async HTTP forward; sync active mapper | controlled 503/504/422/502 plus manual fallback | Active profile router/repository; Resume Upload page | **CONTRACT_VERIFIED** |
 | JobSpy | `app.services.jobspy_service.search_jobs(role, location, opportunity_type, results_wanted=15, hours_old=168)` | async `list[dict]`; blocking library offloaded | `JOBSPY_TIMEOUT_SECONDS`; returns empty list on failure | Opportunity router/repository; Dashboard | **CONTRACT_ALIGNED**, **MOCK_VERIFIED** |
 | Tavily | No active or root `tavily_service.py` | unavailable | guarded partial discovery; JobSpy fallback | Opportunity router; Dashboard | **STILL_MISSING**, **FALLBACK_READY** |
 | Opportunity Groq | Root `services.groq_service.extract_opportunity(...)`; active `app.services.groq_service` exposes reminders only | async Pydantic root model | root exceptions/timeouts; router skips failed items | Opportunity router/repository; Dashboard | **CONTRACT_MISMATCH**, **FALLBACK_READY** |

@@ -37,6 +37,25 @@ Interactive API documentation:
 http://localhost:8000/docs
 ```
 
+## Deadline Registry
+
+Deadline API routes are available under `/api/deadlines`:
+
+```text
+POST /api/deadlines
+GET /api/deadlines?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/deadlines/calendar?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/deadlines/upcoming?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/deadlines/today?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/deadlines/overdue?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/deadlines/needs-review?profile_id=<PUBLIC_PROFILE_UUID>
+GET /api/deadlines/{deadline_id}
+PUT /api/deadlines/{deadline_id}
+DELETE /api/deadlines/{deadline_id}
+```
+
+Deadline timestamps are normalized to UTC before storage. Naive datetimes are treated as UTC. The registry stores manual and Gmail-derived deadlines, but reminder scheduling and notification delivery are intentionally left for a later phase.
+
 ## Gmail OAuth
 
 Gmail integration uses read-only access:

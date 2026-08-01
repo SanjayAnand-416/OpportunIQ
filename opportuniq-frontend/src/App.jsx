@@ -6,6 +6,7 @@ import { ROUTES } from './constants/routes'
 
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const DeadlineCalendar = lazy(() => import('./pages/DeadlineCalendar'))
+const GapAnalysisPage = lazy(() => import('./pages/GapAnalysisPage'))
 const Landing = lazy(() => import('./pages/Landing'))
 const ManualForm = lazy(() => import('./pages/ManualForm'))
 const Notifications = lazy(() => import('./pages/Notifications'))
@@ -31,6 +32,7 @@ function App() {
         <Route path={ROUTES.PROFILE_REVIEW} element={<ProfileReview />} />
         <Route element={<AppLayout />}>
           <Route path={ROUTES.DASHBOARD} element={<Dashboard />} />
+          <Route path={ROUTES.GAP_ANALYSIS} element={<GapAnalysisPage />} />
           <Route path={ROUTES.DEADLINES} element={<DeadlineCalendar />} />
           <Route path={ROUTES.SAVED} element={<SavedOpportunities />} />
           <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />

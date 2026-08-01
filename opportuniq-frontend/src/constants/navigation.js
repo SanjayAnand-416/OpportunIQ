@@ -1,4 +1,4 @@
-import { Bell, Bookmark, CalendarClock, Compass, Settings } from 'lucide-react'
+import { Bell, Bookmark, BrainCircuit, CalendarClock, Compass, Settings } from 'lucide-react'
 import { ROUTES } from './routes'
 
 export const NAV_ITEMS = [
@@ -14,6 +14,12 @@ export const NAV_ITEMS = [
     path: ROUTES.SAVED,
     icon: Bookmark,
     title: 'Saved Opportunities',
+  },
+  {
+    label: 'Gap Advisor',
+    path: ROUTES.GAP_ANALYSIS,
+    icon: BrainCircuit,
+    title: 'Gap Advisor',
   },
   {
     label: 'Deadlines',

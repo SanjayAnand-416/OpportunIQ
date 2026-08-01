@@ -78,3 +78,16 @@ export function getAvatarTone(name) {
   const sum = [...name].reduce((total, char) => total + char.charCodeAt(0), 0)
   return AVATAR_TONES[sum % AVATAR_TONES.length]
 }
+
+export function formatDeadlineDate(deadline) {
+  if (!deadline) return null
+
+  const date = new Date(deadline)
+  if (Number.isNaN(date.getTime())) return null
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  })
+}

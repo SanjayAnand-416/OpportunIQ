@@ -2220,3 +2220,383 @@ a {
     padding: 16px;
   }
 }
+
+/* Opportunity detail drawer */
+
+.no-scroll {
+  overflow: hidden;
+}
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  visibility: hidden;
+  background: rgba(15, 23, 42, 0.45);
+  opacity: 0;
+  transition: opacity 220ms ease, visibility 220ms ease;
+}
+
+.drawer-backdrop-visible {
+  visibility: visible;
+  opacity: 1;
+}
+
+.opportunity-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 75;
+  display: flex;
+  flex-direction: column;
+  width: 420px;
+  height: 100dvh;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: -20px 0 45px rgba(15, 23, 42, 0.18);
+  transform: translateX(100%);
+  transition: transform 300ms ease;
+}
+
+.opportunity-drawer-open {
+  transform: translateX(0);
+}
+
+.drawer-header {
+  position: relative;
+  flex-shrink: 0;
+  padding: 24px 24px 16px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.drawer-close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e2e8f0;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #475569;
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease;
+}
+
+.drawer-close-btn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+.drawer-close-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.drawer-header-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding-right: 44px;
+}
+
+.drawer-avatar {
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+
+.drawer-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 19px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.drawer-company {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.drawer-header-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.drawer-match-badge {
+  width: 44px;
+  height: 44px;
+  margin-left: auto;
+  font-size: 12px;
+}
+
+.drawer-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 24px;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+.drawer-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.drawer-section-title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.drawer-description {
+  max-height: 220px;
+  overflow-y: auto;
+  padding-right: 4px;
+  color: #334155;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.drawer-progress-track {
+  width: 100%;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.drawer-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 700ms ease;
+}
+
+.drawer-progress-fill.tone-green {
+  background: #16a34a;
+}
+
+.drawer-progress-fill.tone-amber {
+  background: #d97706;
+}
+
+.drawer-progress-fill.tone-red {
+  background: #dc2626;
+}
+
+.drawer-progress-fill.tone-gray {
+  background: #94a3b8;
+}
+
+.drawer-skills-summary {
+  margin: 0;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.drawer-skills-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.drawer-skill-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f8fafc;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.drawer-skill-matched svg {
+  color: #16a34a;
+}
+
+.drawer-skill-missing svg {
+  color: #dc2626;
+}
+
+.drawer-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.drawer-detail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.drawer-detail-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.drawer-detail-text {
+  min-width: 0;
+}
+
+.drawer-detail-label {
+  margin: 0;
+  color: #94a3b8;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.drawer-detail-value {
+  margin: 2px 0 0;
+  overflow-wrap: anywhere;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.drawer-detail-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #4f46e5;
+  text-decoration: none;
+}
+
+.drawer-detail-link:hover {
+  text-decoration: underline;
+}
+
+.drawer-also-on {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.drawer-actions {
+  display: flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px 24px;
+  border-top: 1px solid #e2e8f0;
+  background: #ffffff;
+}
+
+.drawer-action-btn {
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 11px 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 150ms ease, border-color 150ms ease, color 150ms ease,
+    transform 150ms ease;
+}
+
+.drawer-action-btn:hover {
+  transform: translateY(-1px);
+}
+
+.drawer-action-btn:focus-visible {
+  outline: 2px solid #4f46e5;
+  outline-offset: 2px;
+}
+
+.drawer-action-secondary {
+  border-color: #e2e8f0;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.drawer-action-secondary:hover {
+  background: #e2e8f0;
+}
+
+.drawer-action-outline {
+  border-color: #c7d2fe;
+  background: #ffffff;
+  color: #4f46e5;
+}
+
+.drawer-action-outline:hover {
+  background: #eef2ff;
+}
+
+.drawer-action-primary {
+  background: #4f46e5;
+  color: #ffffff;
+}
+
+.drawer-action-primary:hover {
+  background: #4338ca;
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
+  .opportunity-drawer {
+    width: 80%;
+  }
+}
+
+@media (max-width: 767px) {
+  .opportunity-drawer {
+    width: 100%;
+  }
+
+  .drawer-header {
+    padding: 20px 16px 14px;
+  }
+
+  .drawer-body {
+    padding: 16px;
+  }
+
+  .drawer-details-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .drawer-actions {
+    flex-direction: column;
+    padding: 14px 16px;
+  }
+
+  .drawer-action-btn {
+    flex: 1 1 auto;
+  }
+}

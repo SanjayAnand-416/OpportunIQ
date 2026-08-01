@@ -2,12 +2,27 @@
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.models import TestReminderRequest, TestReminderResponse
+from app.models import SchedulerStatusResponse, TestReminderRequest, TestReminderResponse
 from app.repositories import deadline_repository
-from app.services.scheduler_service import execute_reminder
+from app.services.scheduler_service import (
+    execute_reminder,
+    list_scheduled_jobs,
+    scheduler_is_running,
+)
 
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
+
+
+@router.get("/scheduler/status", response_model=SchedulerStatusResponse)
+async def scheduler_status() -> SchedulerStatusResponse:
+    """Return process-local scheduler health and serializable jobs."""
+    jobs = list_scheduled_jobs()
+    return SchedulerStatusResponse(
+        running=scheduler_is_running(),
+        job_count=len(jobs),
+        jobs=jobs,
+    )
 
 
 @router.post("/test", response_model=TestReminderResponse)

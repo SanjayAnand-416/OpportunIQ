@@ -2,7 +2,7 @@
 
 import logging
 from collections import deque
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import WebSocket
@@ -116,7 +116,7 @@ async def emit_trace(
         "agent": agent,
         "status": status,
         "message": message,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
         "metadata": metadata or {},
     }
     return await connection_manager.send_event(clean_session_id, event)

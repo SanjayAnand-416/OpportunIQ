@@ -4,7 +4,7 @@ import hashlib
 import json
 import uuid
 from collections.abc import Mapping
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import aiosqlite
@@ -288,7 +288,9 @@ async def get_cached_discovery(
 ) -> tuple[str, list[dict[str, Any]]] | None:
     """Return the newest fresh discovery session for a profile, if available."""
     safe_age = max(1, min(int(max_age_minutes), 24 * 60))
-    cutoff = (datetime.utcnow() - timedelta(minutes=safe_age)).strftime("%Y-%m-%d %H:%M:%S")
+    cutoff = (datetime.now(UTC) - timedelta(minutes=safe_age)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
 
     async with get_db() as db:
         cursor = await db.execute(

@@ -3,19 +3,31 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import logging
 import os
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import urlencode
+from urllib.request import Request as UrlRequest, urlopen
 
+import google_auth_httplib2
+import httplib2
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+
+from app.config import EXTERNAL_HTTP_TIMEOUT_SECONDS
 
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 DEFAULT_CREDENTIALS_FILE = "credentials.json"
 DEFAULT_TOKEN_FILE = "token.json"
 DEFAULT_REDIRECT_URI = "http://localhost:8000/api/gmail/callback"
+GOOGLE_REVOCATION_URL = "https://oauth2.googleapis.com/revoke"
+
+logger = logging.getLogger(__name__)
 
 THREE_PASS_QUERIES = [
     "subject:(interview OR shortlisted OR application OR offer OR submission OR test OR "
@@ -54,38 +66,61 @@ def get_authorization_url(profile_id: str, state: str) -> str:
 def exchange_code_for_credentials(code: str, state: str | None = None) -> Credentials:
     """Exchange an OAuth callback code through Google's flow implementation."""
     flow = get_oauth_flow(state=state)
-    flow.fetch_token(code=code)
+    flow.fetch_token(code=code, timeout=EXTERNAL_HTTP_TIMEOUT_SECONDS)
     return flow.credentials
 
 
 def save_credentials(credentials: Credentials, profile_id: str) -> None:
-    """Persist the OAuth credentials using Person C's token-file model."""
-    del profile_id
-    token_path = _token_path()
+    """Persist credentials in the token file owned by exactly one profile."""
+    token_path = _token_path(profile_id)
+    token_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     token_path.write_text(credentials.to_json(), encoding="utf-8")
     token_path.chmod(0o600)
 
 
-def load_credentials(profile_id: str | None = None) -> Credentials:
-    """Load authorized-user credentials from the configured token file."""
-    del profile_id
-    return Credentials.from_authorized_user_file(str(_token_path()), SCOPES)
+def load_credentials(profile_id: str) -> Credentials:
+    """Load authorized-user credentials for one profile only."""
+    return Credentials.from_authorized_user_file(str(_token_path(profile_id)), SCOPES)
 
 
 def credentials_exist(profile_id: str) -> bool:
-    """Return whether the configured OAuth token exists for the active account."""
-    del profile_id
-    return _token_path().is_file()
+    """Return whether this profile has its own OAuth token."""
+    return _token_path(profile_id).is_file()
 
 
-def delete_credentials(profile_id: str) -> bool:
-    """Delete the configured OAuth token, returning whether it existed."""
-    del profile_id
-    token_path = _token_path()
+def delete_credentials(profile_id: str, revoke: bool = True) -> bool:
+    """Revoke and delete only the token owned by ``profile_id``."""
+    token_path = _token_path(profile_id)
     if not token_path.is_file():
         return False
+    if revoke:
+        try:
+            revoke_credentials(profile_id)
+        except (OSError, ValueError, HTTPError, URLError) as exc:
+            # Local disconnect must still complete when Google is unreachable or
+            # has already invalidated the credential.
+            logger.warning(
+                "Remote Gmail token revocation failed safely: %s",
+                type(exc).__name__,
+            )
     token_path.unlink()
     return True
+
+
+def revoke_credentials(profile_id: str) -> bool:
+    """Ask Google to revoke this profile's refresh/access token, if available."""
+    credentials = load_credentials(profile_id)
+    token = credentials.refresh_token or credentials.token
+    if not token:
+        return False
+    request = UrlRequest(
+        GOOGLE_REVOCATION_URL,
+        data=urlencode({"token": token}).encode("ascii"),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        method="POST",
+    )
+    with urlopen(request, timeout=EXTERNAL_HTTP_TIMEOUT_SECONDS) as response:
+        return 200 <= response.status < 300
 
 
 def get_gmail_service(
@@ -94,10 +129,16 @@ def get_gmail_service(
 ) -> Any:
     """Build the Gmail API client from authorized-user credentials."""
     if token_path is None:
+        if profile_id is None:
+            raise ValueError("profile_id is required for profile-isolated Gmail credentials")
         credentials = load_credentials(profile_id)
     else:
         credentials = Credentials.from_authorized_user_file(token_path, SCOPES)
-    return build("gmail", "v1", credentials=credentials)
+    authorized_http = google_auth_httplib2.AuthorizedHttp(
+        credentials,
+        http=httplib2.Http(timeout=EXTERNAL_HTTP_TIMEOUT_SECONDS),
+    )
+    return build("gmail", "v1", http=authorized_http, cache_discovery=False)
 
 
 def get_connected_email(profile_id: str) -> str | None:
@@ -154,7 +195,18 @@ def extract_body(message: dict[str, Any]) -> str:
     return str(message.get("snippet", ""))
 
 
-def _token_path() -> Path:
-    """Resolve the configured Person C token-file location."""
-    return Path(os.getenv("GOOGLE_TOKEN_FILE", DEFAULT_TOKEN_FILE))
+def _token_path(profile_id: str) -> Path:
+    """Resolve a traversal-safe, stable token path unique to one profile."""
+    clean_profile_id = profile_id.strip()
+    if not clean_profile_id:
+        raise ValueError("profile_id is required for Gmail credentials")
 
+    configured_directory = os.getenv("GOOGLE_TOKEN_DIR", "").strip()
+    if configured_directory:
+        token_directory = Path(configured_directory)
+    else:
+        legacy_path = Path(os.getenv("GOOGLE_TOKEN_FILE", DEFAULT_TOKEN_FILE))
+        token_directory = legacy_path.parent / f"{legacy_path.stem}s"
+
+    profile_key = hashlib.sha256(clean_profile_id.encode("utf-8")).hexdigest()
+    return token_directory / f"{profile_key}.json"

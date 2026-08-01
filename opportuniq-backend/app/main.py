@@ -2,7 +2,6 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
@@ -25,9 +24,6 @@ from app.services.scheduler_service import (
     start_scheduler,
 )
 from app.websocket_manager import connection_manager
-
-
-load_dotenv()
 
 logger = logging.getLogger(__name__)
 

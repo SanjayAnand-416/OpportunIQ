@@ -103,10 +103,11 @@ async def run(
                 [opportunity_id, opportunity_id],
             )
             opportunity_row = await opportunity_cursor.fetchone()
-            if opportunity_row:
-                opportunity_skills = _deserialize_string_list(opportunity_row[0])
-                opportunity_title = opportunity_row[1]
-                effective_role = effective_role or opportunity_title
+            if not opportunity_row:
+                raise ValueError("Opportunity not found")
+            opportunity_skills = _deserialize_string_list(opportunity_row[0])
+            opportunity_title = opportunity_row[1]
+            effective_role = effective_role or opportunity_title
 
     effective_role = effective_role or "Software Engineer"
 
@@ -178,8 +179,37 @@ async def run(
         if job_description
         else "profile_vs_role"
     )
+    # Reuse the existing logical analysis row ID. SQLite's OR REPLACE operates
+    # on keys, so a fresh UUID would otherwise create duplicate analyses.
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        if opportunity_id:
+            existing_cursor = await db.execute(
+                """
+                SELECT id
+                FROM gap_analyses
+                WHERE profile_id = ? AND opportunity_id = ?
+                LIMIT 1
+                """,
+                [profile_id, opportunity_id],
+            )
+        else:
+            existing_cursor = await db.execute(
+                """
+                SELECT id
+                FROM gap_analyses
+                WHERE profile_id = ?
+                  AND opportunity_id IS NULL
+                  AND analysis_mode = ?
+                  AND target_role = ?
+                LIMIT 1
+                """,
+                [profile_id, analysis_mode, effective_role],
+            )
+        existing_row = await existing_cursor.fetchone()
+
+    analysis_id = existing_row[0] if existing_row else str(uuid.uuid4())
     result = GapAnalysisResult(
-        id=str(uuid.uuid4()),
+        id=analysis_id,
         profile_id=profile_id,
         target_role=effective_role,
         analysis_mode=analysis_mode,

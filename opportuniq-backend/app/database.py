@@ -363,6 +363,36 @@ async def init_db() -> None:
         await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_saved_profile_opportunity ON saved_opportunities(profile_id, opportunity_id)")
         await db.execute(
             """
+            CREATE TABLE IF NOT EXISTS gap_analyses (
+                id TEXT PRIMARY KEY,
+                profile_id TEXT NOT NULL,
+                opportunity_id TEXT,
+                target_role TEXT NOT NULL,
+                analysis_mode TEXT NOT NULL,
+                overall_assessment TEXT,
+                missing_skills TEXT,
+                suggested_projects TEXT,
+                evidence_data TEXT,
+                jd_snippet TEXT,
+                profile_snapshot TEXT,
+                generated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_gap_analyses_profile_mode_role
+            ON gap_analyses(profile_id, analysis_mode, target_role)
+            """
+        )
+        await db.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_gap_analyses_profile_opportunity
+            ON gap_analyses(profile_id, opportunity_id)
+            """
+        )
+        await db.execute(
+            """
             CREATE TABLE IF NOT EXISTS notification_settings (
                 profile_id TEXT PRIMARY KEY,
                 r_7d BOOLEAN DEFAULT TRUE,

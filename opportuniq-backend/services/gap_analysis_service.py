@@ -52,17 +52,29 @@ def determine_required_skills(
     # appears in more than one category.
     if jd_extracted:
         skills: list[dict] = []
+        seen: set[str] = set()
 
-        for skill in jd_extracted.get("required_skills", []):
-            skills.append({"skill": skill, "frequency": 1.0})
-
-        for skill in jd_extracted.get("tech_stack", []):
-            if skill not in [item["skill"] for item in skills]:
-                skills.append({"skill": skill, "frequency": 0.8})
-
-        for skill in jd_extracted.get("preferred_skills", []):
-            if skill not in [item["skill"] for item in skills]:
-                skills.append({"skill": skill, "frequency": 0.7})
+        # Categories are processed from strongest to weakest frequency. This
+        # makes the first occurrence authoritative while deduplicating both
+        # within and across categories case-insensitively.
+        categories = (
+            ("required_skills", 1.0),
+            ("tech_stack", 0.8),
+            ("preferred_skills", 0.7),
+        )
+        for category, frequency in categories:
+            values = jd_extracted.get(category)
+            if not isinstance(values, (list, tuple)):
+                continue
+            for value in values:
+                if not isinstance(value, str):
+                    continue
+                skill = value.strip()
+                key = skill.lower()
+                if not skill or key in seen:
+                    continue
+                skills.append({"skill": skill, "frequency": frequency})
+                seen.add(key)
 
         return skills[:20]
 

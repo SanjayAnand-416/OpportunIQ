@@ -54,7 +54,31 @@ PUT /api/deadlines/{deadline_id}
 DELETE /api/deadlines/{deadline_id}
 ```
 
-Deadline timestamps are normalized to UTC before storage. Naive datetimes are treated as UTC. The registry stores manual and Gmail-derived deadlines, but reminder scheduling and notification delivery are intentionally left for a later phase.
+Deadline timestamps are normalized to UTC before storage. Naive datetimes are treated as UTC. Active dated deadlines receive reminders 7 days, 3 days, and 1 day before the deadline, plus a same-day reminder at 09:00 in `APP_TIMEZONE`. Past reminder offsets are skipped.
+
+## Reminder Scheduler
+
+Set the local calendar timezone used for same-day reminders:
+
+```text
+APP_TIMEZONE=Asia/Kolkata
+```
+
+APScheduler runs in UTC and starts with the FastAPI lifespan. Its jobs are process-local and are recreated from active future records in `deadline_registry` after every restart. Completing, cancelling, deleting, or changing a deadline cancels or replaces its jobs.
+
+Reminder execution always creates an idempotent dashboard notification first and then publishes a `notifier` event on the existing agent-trace WebSocket using the public `profile_id` as its session key. Compatible Groq and email services are used when available. Missing or failed optional integrations fall back to deterministic reminder text and do not prevent dashboard delivery.
+
+Useful endpoints:
+
+```text
+GET /api/notifications?profile_id=<PUBLIC_PROFILE_UUID>
+PATCH /api/notifications/{notification_id}/read
+PATCH /api/notifications/read-all?profile_id=<PUBLIC_PROFILE_UUID>
+POST /api/notifications/test
+GET /api/notifications/scheduler/status
+```
+
+`POST /api/notifications/test` accepts `{"deadline_id": "<DEADLINE_UUID>"}` and executes immediately without waiting for APScheduler. Repeated test reminders create separate dashboard notifications.
 
 ## Gmail OAuth
 

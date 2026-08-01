@@ -45,6 +45,7 @@ export default function GapAnalysisModal({
   isSubmitting,
   savedOpportunities = [],
   initialConfig,
+  lockedOpportunity,
   onClose,
   onSubmit,
 }) {
@@ -55,6 +56,11 @@ export default function GapAnalysisModal({
 
   const validationMessage = useMemo(() => getValidationMessage(config), [config])
   const isValid = !validationMessage
+  const opportunityOptions = useMemo(() => {
+    if (!lockedOpportunity) return savedOpportunities
+    const exists = savedOpportunities.some((opportunity) => opportunity.id === lockedOpportunity.id)
+    return exists ? savedOpportunities : [lockedOpportunity, ...savedOpportunities]
+  }, [lockedOpportunity, savedOpportunities])
 
   function updateConfig(field, value) {
     setConfig((current) => ({ ...current, [field]: value }))
@@ -144,17 +150,17 @@ export default function GapAnalysisModal({
                 id="gap-saved-opportunity"
                 value={config.opportunityId}
                 onChange={(event) => updateConfig('opportunityId', event.target.value)}
-                disabled={isSubmitting || savedOpportunities.length === 0}
+                disabled={isSubmitting || opportunityOptions.length === 0 || Boolean(lockedOpportunity)}
                 required
               >
                 <option value="">Select an opportunity</option>
-                {savedOpportunities.map((opportunity) => (
+                {opportunityOptions.map((opportunity) => (
                   <option key={opportunity.id || opportunity.savedId} value={opportunity.id}>
                     {[opportunity.company, opportunity.title].filter(Boolean).join(' - ')}
                   </option>
                 ))}
               </select>
-              {savedOpportunities.length === 0 && (
+              {opportunityOptions.length === 0 && (
                 <p className="gap-form-help">Save an opportunity first to use this mode.</p>
               )}
             </div>

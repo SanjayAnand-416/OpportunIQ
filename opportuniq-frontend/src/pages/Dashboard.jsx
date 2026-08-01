@@ -1,6 +1,7 @@
 import { Loader2, RefreshCw, RotateCw, Search } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useOutletContext } from 'react-router-dom'
+import { runGapAnalysis } from '../api/gapAnalysis'
 import {
   getOpportunitiesByProfile,
   getOpportunitiesBySession,
@@ -9,6 +10,7 @@ import {
   searchOpportunities,
 } from '../api/opportunities'
 import AgentTracePanel from '../components/dashboard/AgentTracePanel'
+import GapAnalysisModal from '../components/dashboard/GapAnalysisModal'
 import OpportunityCardSkeleton from '../components/dashboard/OpportunityCardSkeleton'
 import OpportunityCard from '../components/dashboard/OpportunityCard'
 import OpportunityDetailDrawer from '../components/dashboard/OpportunityDetailDrawer'
@@ -17,6 +19,7 @@ import Toast from '../components/common/Toast'
 import { ROUTES } from '../constants/routes'
 import { useAppContext } from '../contexts/AppContext'
 import { useToast } from '../hooks/useToast'
+import { GAP_ANALYSIS_MODES, serializeGapRunPayload } from '../utils/gapAnalysis'
 import { normalizeOpportunities } from '../utils/opportunities'
 
 const SKELETON_COUNT = 6
@@ -40,9 +43,14 @@ export default function Dashboard() {
   const [searchError, setSearchError] = useState('')
   const [sessionId, setSessionId] = useState(null)
   const [isTraceOpen, setIsTraceOpen] = useState(false)
+  const [traceMode, setTraceMode] = useState('opportunities')
 
   const [selectedOpportunity, setSelectedOpportunity] = useState(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [isGapModalOpen, setIsGapModalOpen] = useState(false)
+  const [isStartingGapAnalysis, setIsStartingGapAnalysis] = useState(false)
+  const [gapModalOpportunity, setGapModalOpportunity] = useState(null)
+  const [gapRefreshKey, setGapRefreshKey] = useState(0)
 
   const [toastMessage, setToastMessage] = useToast()
   const [dismissedProfileError, setDismissedProfileError] = useState('')
@@ -94,6 +102,7 @@ export default function Dashboard() {
       if (response.status === 'complete' || response.cached) {
         await loadOpportunities(response.session_id)
       } else {
+        setTraceMode('opportunities')
         setIsTraceOpen(true)
       }
     } catch (error) {
@@ -104,6 +113,12 @@ export default function Dashboard() {
   }
 
   function handleTraceComplete() {
+    if (traceMode === 'gap-analysis') {
+      setGapRefreshKey((current) => current + 1)
+      setToastMessage('Gap Analysis Completed')
+      return
+    }
+
     if (sessionId) loadOpportunities(sessionId)
   }
 
@@ -131,6 +146,39 @@ export default function Dashboard() {
   function handleAddDeadline() {
     setIsDrawerOpen(false)
     navigate(ROUTES.DEADLINES)
+  }
+
+  function handleOpenGapAnalysis(opportunity) {
+    setGapModalOpportunity(opportunity)
+    setIsGapModalOpen(true)
+  }
+
+  function handleCloseGapModal() {
+    if (isStartingGapAnalysis) return
+    setIsGapModalOpen(false)
+    setGapModalOpportunity(null)
+  }
+
+  async function handleRunGapAnalysis(config) {
+    if (!profileId) return
+
+    setIsStartingGapAnalysis(true)
+    try {
+      const response = await runGapAnalysis(
+        serializeGapRunPayload({ profileId, ...config }),
+      )
+      const nextSessionId = response.session_id || response.sessionId
+      setToastMessage('Gap Analysis Started')
+      setIsGapModalOpen(false)
+      setGapModalOpportunity(null)
+      setSessionId(nextSessionId)
+      setTraceMode('gap-analysis')
+      setIsTraceOpen(Boolean(nextSessionId))
+    } catch {
+      setToastMessage('Unable to start gap analysis')
+    } finally {
+      setIsStartingGapAnalysis(false)
+    }
   }
 
   const isBusy = isLoadingOpportunities || isSearching
@@ -309,11 +357,29 @@ export default function Dashboard() {
       <OpportunityDetailDrawer
         isOpen={isDrawerOpen}
         opportunity={selectedOpportunity}
+        profileId={profileId}
+        gapRefreshKey={gapRefreshKey}
         onClose={() => setIsDrawerOpen(false)}
         onApply={handleApply}
         onSave={handleSave}
         onAddDeadline={handleAddDeadline}
+        onRunGapAnalysis={handleOpenGapAnalysis}
+        onReadFullAnalysis={(analysisId) => navigate(`/dashboard/gap-analysis/${analysisId}`)}
       />
+
+      {isGapModalOpen && (
+        <GapAnalysisModal
+          isOpen={isGapModalOpen}
+          isSubmitting={isStartingGapAnalysis}
+          initialConfig={{
+            mode: GAP_ANALYSIS_MODES.SAVED_OPPORTUNITY,
+            opportunityId: gapModalOpportunity?.id || '',
+          }}
+          lockedOpportunity={gapModalOpportunity}
+          onClose={handleCloseGapModal}
+          onSubmit={handleRunGapAnalysis}
+        />
+      )}
 
       <Toast message={toastMessage} />
     </div>

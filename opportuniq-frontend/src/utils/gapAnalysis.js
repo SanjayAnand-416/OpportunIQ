@@ -97,6 +97,18 @@ export function formatGapTimestamp(value) {
 }
 
 export function normalizeGapAnalysisResult(data) {
+  if (
+    !data ||
+    data.analysis === null ||
+    data.result === null ||
+    data.available === false ||
+    data.exists === false ||
+    data.status === 'not_found' ||
+    data.status === 'no_analysis'
+  ) {
+    return null
+  }
+
   const raw = data?.analysis || data?.result || data
   if (!raw || Object.keys(raw).length === 0) return null
 

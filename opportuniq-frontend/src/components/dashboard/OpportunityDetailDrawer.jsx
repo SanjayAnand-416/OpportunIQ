@@ -14,8 +14,13 @@ import {
   X,
   XCircle,
   Bookmark,
+  BrainCircuit,
 } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getGapAnalysisForOpportunity, getGapAnalysisErrorMessage } from '../../api/gapAnalysis'
+import EmptyState from '../common/EmptyState'
+import ErrorState from '../common/ErrorState'
+import SkeletonCard from '../common/SkeletonCard'
 import {
   formatDeadlineDate,
   getAvatarTone,
@@ -24,6 +29,11 @@ import {
   getMatchColor,
   getPlatformInfo,
 } from '../../utils/opportunityCard'
+import {
+  calculateReadinessColor,
+  getReadinessInterpretation,
+  normalizeGapAnalysisResult,
+} from '../../utils/gapAnalysis'
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input, textarea, select, [tabindex]:not([tabindex="-1"])'
@@ -80,13 +90,178 @@ function SkillMatchItem({ skill, matched }) {
   )
 }
 
+function DrawerReadinessScore({ score }) {
+  const tone = calculateReadinessColor(score)
+
+  return (
+    <div className="drawer-gap-summary-card">
+      <span className={`drawer-gap-score score-${tone}`} aria-label={`Overall readiness ${score}%`}>
+        {score}%
+      </span>
+      <div>
+        <strong>{getReadinessInterpretation(score)}</strong>
+        <p>AI readiness score for this opportunity.</p>
+      </div>
+    </div>
+  )
+}
+
+function DrawerSkillChip({ skill, tone = skill.priority?.toLowerCase?.() || 'medium' }) {
+  return <span className={`gap-priority-chip priority-${tone}`}>{skill.name || skill}</span>
+}
+
+function OpportunityGapAnalysisSection({
+  isOpen,
+  profileId,
+  opportunity,
+  refreshKey,
+  onRunGapAnalysis,
+  onReadFullAnalysis,
+}) {
+  const [analysis, setAnalysis] = useState(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const opportunityId = opportunity?.id
+
+  const loadGapAnalysis = useCallback(async (signal) => {
+    if (!isOpen || !profileId || !opportunityId) return
+
+    setIsLoading(true)
+    setError('')
+    try {
+      const data = await getGapAnalysisForOpportunity(profileId, opportunityId, { signal })
+      setAnalysis(normalizeGapAnalysisResult(data))
+    } catch (requestError) {
+      if (requestError.name === 'CanceledError' || requestError.code === 'ERR_CANCELED') return
+      if (requestError.response?.status === 404 || requestError.response?.status === 204) {
+        setAnalysis(null)
+        return
+      }
+      setError(getGapAnalysisErrorMessage(requestError))
+    } finally {
+      setIsLoading(false)
+    }
+  }, [isOpen, opportunityId, profileId])
+
+  useEffect(() => {
+    if (!isOpen || !profileId || !opportunityId) return undefined
+    const controller = new AbortController()
+    Promise.resolve().then(() => loadGapAnalysis(controller.signal))
+    return () => controller.abort()
+  }, [isOpen, loadGapAnalysis, opportunityId, profileId, refreshKey])
+
+  const topMissingSkills = useMemo(() => {
+    if (!analysis) return []
+    const priorityOrder = { High: 0, Medium: 1, Low: 2 }
+    return [...analysis.missingSkills]
+      .sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
+      .slice(0, 5)
+  }, [analysis])
+
+  const priorityRoadmap = analysis?.roadmap.slice(0, 3) || []
+
+  return (
+    <section aria-labelledby="drawer-gap-heading" className="drawer-section drawer-gap-section">
+      <h3 id="drawer-gap-heading" className="drawer-section-title">
+        AI Gap Analysis
+      </h3>
+
+      {isLoading && <SkeletonCard lines={5} />}
+
+      {!isLoading && error && (
+        <ErrorState
+          title="Unable to load gap analysis."
+          message={error}
+          retryButton="Retry"
+          onRetry={() => loadGapAnalysis()}
+        />
+      )}
+
+      {!isLoading && !error && !analysis && (
+        <EmptyState
+          Icon={BrainCircuit}
+          title="No Gap Analysis Available"
+          subtitle="Generate an AI-powered skill gap analysis for this opportunity to understand missing skills and personalized learning recommendations."
+          primaryButton="Run Gap Analysis"
+          onPrimaryClick={() => onRunGapAnalysis?.(opportunity)}
+        />
+      )}
+
+      {!isLoading && !error && analysis && (
+        <div className="drawer-gap-content">
+          <DrawerReadinessScore score={analysis.readinessScore} />
+
+          <div className="drawer-gap-block">
+            <h4>Top Missing Skills</h4>
+            <div className="gap-chip-list">
+              {topMissingSkills.length > 0 ? (
+                topMissingSkills.map((skill) => <DrawerSkillChip key={skill.name} skill={skill} />)
+              ) : (
+                <span className="gap-muted-text">No missing skills identified.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="drawer-gap-block">
+            <h4>Skills That Need Improvement</h4>
+            <div className="gap-chip-list">
+              {analysis.partialSkills.length > 0 ? (
+                analysis.partialSkills.map((skill) => (
+                  <DrawerSkillChip key={skill.name} skill={skill} tone="medium" />
+                ))
+              ) : (
+                <span className="gap-muted-text">No partial skills identified.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="drawer-gap-block">
+            <h4>Immediate Learning Priorities</h4>
+            {priorityRoadmap.length > 0 ? (
+              <ol className="drawer-gap-roadmap">
+                {priorityRoadmap.map((step) => (
+                  <li key={step.id}>
+                    <strong>{step.skill}</strong>
+                    <span>{step.duration}</span>
+                    <p>{step.description}</p>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <span className="gap-muted-text">No roadmap recommendations available.</span>
+            )}
+          </div>
+
+          <div className="drawer-gap-block">
+            <h4>AI Recommendation</h4>
+            <p className="drawer-gap-summary">{analysis.summary || 'Not Provided'}</p>
+            <button
+              type="button"
+              className="gap-card-action"
+              onClick={() => onReadFullAnalysis?.(analysis.id)}
+              disabled={!analysis.id}
+              aria-label={`Read full gap analysis for ${opportunity.title}`}
+            >
+              Read Full Analysis
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
+  )
+}
+
 export default function OpportunityDetailDrawer({
   isOpen,
   opportunity,
+  profileId,
+  gapRefreshKey = 0,
   onClose,
   onApply,
   onSave,
   onAddDeadline,
+  onRunGapAnalysis,
+  onReadFullAnalysis,
 }) {
   const drawerRef = useRef(null)
   const closeButtonRef = useRef(null)
@@ -274,6 +449,15 @@ export default function OpportunityDetailDrawer({
               <p className="drawer-skills-summary">No skill data available.</p>
             )}
           </section>
+
+          <OpportunityGapAnalysisSection
+            isOpen={isOpen}
+            profileId={profileId}
+            opportunity={opportunity}
+            refreshKey={gapRefreshKey}
+            onRunGapAnalysis={onRunGapAnalysis}
+            onReadFullAnalysis={onReadFullAnalysis}
+          />
 
           <section aria-labelledby="drawer-details-heading" className="drawer-section">
             <h3 id="drawer-details-heading" className="drawer-section-title">

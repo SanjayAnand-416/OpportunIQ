@@ -1130,6 +1130,113 @@ textarea:focus-visible,
   background: #2563eb;
 }
 
+.drawer-gap-section .ui-empty-state,
+.drawer-gap-section .ui-error-state,
+.drawer-gap-section .ui-skeleton-card {
+  padding: 16px;
+}
+
+.drawer-gap-content {
+  display: grid;
+  gap: 14px;
+}
+
+.drawer-gap-summary-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--dash-border);
+  border-radius: 16px;
+  background: #f8fafc;
+  padding: 14px;
+}
+
+.drawer-gap-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 74px;
+  height: 74px;
+  border: 7px solid currentColor;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  font-size: 18px;
+  font-weight: 950;
+  animation: gap-score-pop 520ms ease both;
+}
+
+.drawer-gap-summary-card strong,
+.drawer-gap-block h4,
+.drawer-gap-roadmap strong {
+  color: var(--dash-text);
+}
+
+.drawer-gap-summary-card strong {
+  display: block;
+  font-size: 16px;
+}
+
+.drawer-gap-summary-card p,
+.drawer-gap-block h4,
+.drawer-gap-roadmap,
+.drawer-gap-roadmap p,
+.drawer-gap-summary {
+  margin: 0;
+}
+
+.drawer-gap-summary-card p {
+  margin-top: 4px;
+  color: var(--dash-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.drawer-gap-block {
+  display: grid;
+  gap: 8px;
+}
+
+.drawer-gap-block h4 {
+  font-size: 13px;
+}
+
+.drawer-gap-roadmap {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.drawer-gap-roadmap li {
+  border: 1px solid var(--dash-border);
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 11px;
+}
+
+.drawer-gap-roadmap span {
+  display: inline-flex;
+  margin-top: 4px;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.drawer-gap-roadmap p,
+.drawer-gap-summary {
+  margin-top: 5px;
+  color: var(--dash-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.drawer-gap-summary {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+}
+
 @keyframes gap-score-pop {
   from {
     opacity: 0;
@@ -1189,6 +1296,11 @@ textarea:focus-visible,
   .gap-modal-secondary,
   .gap-modal-primary {
     width: 100%;
+  }
+
+  .drawer-gap-summary-card {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .gap-results-title-row,

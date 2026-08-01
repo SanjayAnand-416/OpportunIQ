@@ -10,6 +10,14 @@ export async function getGapAnalysis(analysisId) {
   return response.data
 }
 
+export async function getGapAnalysisForOpportunity(profileId, opportunityId, options = {}) {
+  const response = await apiClient.get(
+    `/api/gap-analysis/${profileId}/for-opportunity/${opportunityId}`,
+    options,
+  )
+  return response.data
+}
+
 export async function runGapAnalysis(payload) {
   const response = await apiClient.post('/api/gap-analysis/run', payload)
   return response.data

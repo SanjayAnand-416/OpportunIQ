@@ -241,7 +241,7 @@ class GapSuggestedProject(BaseModel):
 
     project_type: str = Field(min_length=1)
     description: str = Field(min_length=1)
-    skills_addressed: list[str] = Field(min_length=1)
+    skills_addressed: list[str]
 
     @field_validator("project_type", "description", mode="before")
     @classmethod
@@ -466,8 +466,8 @@ async def run_gap_analysis_llm(payload: dict) -> dict:
 
     target_role = _require_text(payload.get("target_role"), "payload.target_role")
     raw_gaps = payload.get("gaps")
-    if not isinstance(raw_gaps, list) or not raw_gaps:
-        raise GroqInputError("payload.gaps must be a non-empty list.")
+    if not isinstance(raw_gaps, list):
+        raise GroqInputError("payload.gaps must be a list.")
 
     # Retain only the deterministic fields produced by score_student_evidence;
     # unrelated caller data is never forwarded to the model as a gap.
@@ -489,9 +489,6 @@ async def run_gap_analysis_llm(payload: dict) -> dict:
         )
         gap_keys.add(key)
 
-    if not gaps:
-        raise GroqInputError("payload.gaps must contain at least one valid skill gap.")
-
     student_skills = payload.get("student_skills", [])
     if not isinstance(student_skills, list) or not all(
         isinstance(skill, str) for skill in student_skills
@@ -508,7 +505,7 @@ The student's current skills: {", ".join(student_skills)}
 Your task:
 1. For every gap skill, write a 1-2 sentence explanation of WHY this skill matters for {target_role}.
 2. Suggest exactly 3 projects the student can build to address multiple gaps. Be specific and practical.
-3. For every gap skill, suggest at least 1 real learning resource with a real URL that starts with http.
+3. For every gap skill, suggest 1 real learning resource with a real URL that starts with http.
 4. Write a 2-3 sentence overall assessment of the student's readiness for {target_role}.
 
 IMPORTANT: Only address the skills listed in the deterministic gaps above. Do NOT add, infer, rename, or substitute any gap skill. Project skills_addressed must also contain only those exact gap skills. Return JSON only matching the requested schema."""

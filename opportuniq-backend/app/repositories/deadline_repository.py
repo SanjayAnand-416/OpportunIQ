@@ -436,6 +436,31 @@ async def list_needs_review_deadlines(
     return sorted(deadlines, key=lambda item: str(item.get("created_at") or ""), reverse=True)
 
 
+async def list_schedulable_deadlines() -> list[dict[str, Any]]:
+    """Return active, dated deadlines whose deadline time is still future."""
+    now = datetime.now(UTC)
+    async with get_db() as db:
+        cursor = await db.execute(
+            f"""
+            SELECT {', '.join(DEADLINE_COLUMNS)}
+            FROM deadline_registry
+            WHERE deadline_datetime IS NOT NULL
+              AND COALESCE(is_completed, 0) = 0
+              AND COALESCE(is_cancelled, 0) = 0
+            ORDER BY deadline_datetime ASC
+            """
+        )
+        rows = await cursor.fetchall()
+        await cursor.close()
+    deadlines = [item for row in rows if (item := row_to_deadline(row)) is not None]
+    return [
+        deadline
+        for deadline in deadlines
+        if (_to_utc_datetime(deadline.get("deadline_datetime")) or datetime.min.replace(tzinfo=UTC))
+        > now
+    ]
+
+
 def _normalize_update_value(field_name: str, value: Any) -> Any:
     if field_name == "title":
         return _clean_title(value)

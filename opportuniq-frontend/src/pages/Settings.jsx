@@ -21,6 +21,7 @@ import ToggleSwitch from '../components/settings/ToggleSwitch'
 import TagInput from '../components/onboarding/TagInput'
 import { useAppContext } from '../contexts/AppContext'
 import { useLocalStorage } from '../hooks/useLocalStorage'
+import { useToast } from '../hooks/useToast'
 import { normalizeProfile, serializeProfile } from '../utils/helpers'
 import {
   SETTINGS_STORAGE_KEY,
@@ -73,7 +74,7 @@ export default function Settings() {
   const [isSaving, setIsSaving] = useState(false)
   const [isDisconnecting, setIsDisconnecting] = useState(false)
   const [error, setError] = useState('')
-  const [toast, setToast] = useState('')
+  const [toast, setToast] = useToast()
   const [isResetDialogOpen, setIsResetDialogOpen] = useState(false)
 
   const loadSettings = useCallback(async () => {

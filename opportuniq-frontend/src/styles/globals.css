@@ -16,11 +16,37 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 a {
   color: inherit;
   text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.route-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  background: #ffffff;
 }
 
 .landing-page {
@@ -3379,12 +3405,6 @@ a {
 
 .page-container {
   padding: 24px 28px;
-}
-
-.page-placeholder {
-  margin: 0;
-  color: var(--dash-muted);
-  font-size: 15px;
 }
 
 .right-panel {

@@ -7,6 +7,11 @@ from app import database
 from app.main import app
 from app.repositories import profile_repository
 from app.routers import profile as profile_router
+from app.services.resume_service import (
+    ResumeAIExtractionError,
+    ResumeAIResponseError,
+    ResumeAITimeoutError,
+)
 
 
 VALID_PROFILE = {
@@ -162,6 +167,75 @@ def test_upload_service_unavailable_returns_503(client, monkeypatch):
     assert response.json()["fallback"] == "manual"
 
 
+@pytest.mark.parametrize(
+    ("filename", "content_type"),
+    [
+        ("resume.pdf", "application/pdf"),
+        ("resume.doc", "application/msword"),
+        (
+            "resume.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ),
+    ],
+)
+def test_upload_accepts_supported_document_types(
+    client, monkeypatch, filename, content_type
+):
+    monkeypatch.setattr(profile_router, "_resume_service_functions", lambda: (None, None))
+
+    response = client.post(
+        "/api/profile/upload",
+        files={"file": (filename, b"document", content_type)},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["fallback"] == "manual"
+
+
+@pytest.mark.parametrize(
+    ("exception", "expected_status", "expected_detail"),
+    [
+        (
+            ResumeAITimeoutError("timeout"),
+            504,
+            "Resume extraction service timed out.",
+        ),
+        (
+            ResumeAIExtractionError("rejected"),
+            422,
+            "Resume extraction failed.",
+        ),
+        (
+            ResumeAIResponseError("invalid"),
+            502,
+            "Resume extraction returned an invalid response.",
+        ),
+    ],
+)
+def test_upload_translates_resume_service_failures(
+    client, monkeypatch, exception, expected_status, expected_detail
+):
+    async def fail(*_args):
+        raise exception
+
+    monkeypatch.setattr(
+        profile_router,
+        "_resume_service_functions",
+        lambda: (fail, lambda *_args, **_kwargs: {}),
+    )
+
+    response = client.post(
+        "/api/profile/upload",
+        files={"file": ("resume.pdf", b"%PDF-1.4", "application/pdf")},
+    )
+
+    assert response.status_code == expected_status
+    assert response.json() == {
+        "detail": expected_detail,
+        "fallback": "manual",
+    }
+
+
 def test_upload_resumeai_failure_returns_422(client, monkeypatch):
     async def fake_forward_to_resumeai(file_bytes, filename, content_type):
         return SimpleNamespace(success=False, data=None)
@@ -230,3 +304,6 @@ def test_successful_resume_upload_uses_mocked_resumeai(client, monkeypatch):
     body = response.json()
     assert body["profile"]["name"] == "Resume Student"
     assert body["missing_fields"] == ["email", "degree", "college"]
+    stored = client.get(f"/api/profile/{body['profile_id']}")
+    assert stored.status_code == 200
+    assert stored.json()["name"] == "Resume Student"

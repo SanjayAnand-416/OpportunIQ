@@ -49,6 +49,72 @@ textarea:focus-visible,
   background: #ffffff;
 }
 
+.app-error-boundary,
+.not-found-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+}
+
+.app-error-card {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  width: min(100%, 520px);
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
+  background: #ffffff;
+  padding: 32px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(148, 163, 184, 0.22);
+}
+
+.app-error-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  color: #b91c1c;
+  background: #fee2e2;
+  font-size: 28px;
+  font-weight: 900;
+}
+
+.app-error-card h1,
+.app-error-card p {
+  margin: 0;
+}
+
+.app-error-card h1 {
+  color: #0f172a;
+  font-size: 24px;
+}
+
+.app-error-card p {
+  color: #64748b;
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.app-error-actions,
+.not-found-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.not-found-page {
+  flex-direction: column;
+  gap: 14px;
+}
+
 .landing-page {
   min-height: 100vh;
   color: #020617;

@@ -9,6 +9,7 @@ const DeadlineCalendar = lazy(() => import('./pages/DeadlineCalendar'))
 const Landing = lazy(() => import('./pages/Landing'))
 const ManualForm = lazy(() => import('./pages/ManualForm'))
 const Notifications = lazy(() => import('./pages/Notifications'))
+const NotFound = lazy(() => import('./pages/NotFound'))
 const ProfileReview = lazy(() => import('./pages/ProfileReview'))
 const ResumeUpload = lazy(() => import('./pages/ResumeUpload'))
 const SavedOpportunities = lazy(() => import('./pages/SavedOpportunities'))
@@ -35,6 +36,7 @@ function App() {
           <Route path={ROUTES.NOTIFICATIONS} element={<Notifications />} />
           <Route path={ROUTES.SETTINGS} element={<Settings />} />
         </Route>
+        <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
   )

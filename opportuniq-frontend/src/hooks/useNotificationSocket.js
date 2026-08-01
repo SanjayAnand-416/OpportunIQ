@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { notificationFromSocketPayload } from '../utils/notifications'
 
-const WS_BASE_URL = 'ws://localhost:8000'
+const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8000'
 const RECONNECT_DELAY_MS = 2000
 
 export function useNotificationSocket(profileId, onNotification) {
